@@ -19,11 +19,13 @@ package org.apache.spark
 
 import java.io.File
 import java.net.Socket
+import java.util.concurrent.ConcurrentHashMap
 
 import scala.collection.mutable
 import scala.util.Properties
 
 import com.google.common.collect.MapMaker
+import org.apache.hadoop.security.UserGroupInformation
 
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.api.python.PythonWorkerFactory
@@ -135,20 +137,26 @@ class SparkEnv (
 }
 
 object SparkEnv extends Logging {
-  @volatile private var env: SparkEnv = _
+  private val env = new ConcurrentHashMap[String, SparkEnv]()
 
   private[spark] val driverSystemName = "sparkDriver"
   private[spark] val executorSystemName = "sparkExecutor"
 
+  private[this] def user = UserGroupInformation.getCurrentUser.getShortUserName
+
   def set(e: SparkEnv) {
-    env = e
+    if (e == null) {
+      env.remove(user)
+    } else {
+      env.put(user, e)
+    }
   }
 
   /**
    * Returns the SparkEnv.
    */
   def get: SparkEnv = {
-    env
+    env.get(user)
   }
 
   /**
