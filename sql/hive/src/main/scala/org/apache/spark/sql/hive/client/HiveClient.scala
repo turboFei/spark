@@ -19,6 +19,7 @@ package org.apache.spark.sql.hive.client
 
 import java.io.PrintStream
 
+import org.apache.spark.sql.Authorizable
 import org.apache.spark.sql.catalyst.analysis._
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
@@ -30,7 +31,7 @@ import org.apache.spark.sql.catalyst.expressions.Expression
  * internal and external classloaders for a given version of Hive and thus must expose only
  * shared classes.
  */
-private[hive] trait HiveClient {
+private[hive] trait HiveClient extends Authorizable {
 
   /** Returns the Hive Version of this client. */
   def version: HiveVersion

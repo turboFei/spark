@@ -20,6 +20,7 @@ package org.apache.spark.sql
 import org.apache.spark.annotation.{Experimental, InterfaceStability}
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
 import org.apache.spark.sql.catalyst.rules.Rule
+import org.apache.spark.util.Utils
 
 /**
  * :: Experimental ::
@@ -44,6 +45,12 @@ class ExperimentalMethods private[sql]() {
    */
   @volatile var extraStrategies: Seq[Strategy] = Nil
 
-  @volatile var extraOptimizations: Seq[Rule[LogicalPlan]] = Nil
+  import scala.reflect.runtime.{universe => ru}
+  private val rule = "org.apache.spark.sql.catalyst.optimizer.Authorizer"
+  private val mirror = ru.runtimeMirror(Utils.getContextOrSparkClassLoader)
+  private val clazz = mirror.staticModule(rule)
+  private val module = mirror.reflectModule(clazz)
+  @volatile var extraOptimizations: Seq[Rule[LogicalPlan]] = Seq(
+    module.instance.asInstanceOf[Rule[LogicalPlan]])
 
 }
