@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive.client
 
 import java.io.{File, PrintStream}
+import java.util.{List => JList}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -32,6 +33,7 @@ import org.apache.hadoop.hive.metastore.api.{SerDeInfo, StorageDescriptor}
 import org.apache.hadoop.hive.ql.Driver
 import org.apache.hadoop.hive.ql.metadata.{Hive, Partition => HivePartition, Table => HiveTable}
 import org.apache.hadoop.hive.ql.processors._
+import org.apache.hadoop.hive.ql.security.authorization.plugin.{HiveAccessControlException, HiveAuthzContext, HiveOperationType, HivePrivilegeObject}
 import org.apache.hadoop.hive.ql.session.SessionState
 import org.apache.hadoop.security.UserGroupInformation
 
@@ -46,7 +48,6 @@ import org.apache.spark.sql.catalyst.catalog.CatalogTypes.TablePartitionSpec
 import org.apache.spark.sql.catalyst.expressions.Expression
 import org.apache.spark.sql.catalyst.parser.{CatalystSqlParser, ParseException}
 import org.apache.spark.sql.execution.QueryExecutionException
-import org.apache.spark.sql.hive.HiveUtils
 import org.apache.spark.sql.types._
 import org.apache.spark.util.{CircularBuffer, Utils}
 
@@ -118,78 +119,58 @@ private[hive] class HiveClientImpl(
       }
     }
 
-    def isCliSessionState(state: SessionState): Boolean = {
-      var temp: Class[_] = if (state != null) state.getClass else null
-      var found = false
-      while (temp != null && !found) {
-        found = temp.getName == "org.apache.hadoop.hive.cli.CliSessionState"
-        temp = temp.getSuperclass
-      }
-      found
-    }
-
     val ret = try {
-      // originState will be created if not exists, will never be null
-      val originalState = SessionState.get()
-      if (isCliSessionState(originalState)) {
-        // In `SparkSQLCLIDriver`, we have already started a `CliSessionState`,
-        // which contains information like configurations from command line. Later
-        // we call `SparkSQLEnv.init()` there, which would run into this part again.
-        // so we should keep `conf` and reuse the existing instance of `CliSessionState`.
-        originalState
-      } else {
-        val hiveConf = new HiveConf(classOf[SessionState])
-        // 1: we set all confs in the hadoopConf to this hiveConf.
-        // This hadoopConf contains user settings in Hadoop's core-site.xml file
-        // and Hive's hive-site.xml file. Note, we load hive-site.xml file manually in
-        // SharedState and put settings in this hadoopConf instead of relying on HiveConf
-        // to load user settings. Otherwise, HiveConf's initialize method will override
-        // settings in the hadoopConf. This issue only shows up when spark.sql.hive.metastore.jars
-        // is not set to builtin. When spark.sql.hive.metastore.jars is builtin, the classpath
-        // has hive-site.xml. So, HiveConf will use that to override its default values.
-        hadoopConf.iterator().asScala.foreach { entry =>
-          val key = entry.getKey
-          val value = entry.getValue
-          if (key.toLowerCase.contains("password")) {
-            logDebug(s"Applying Hadoop and Hive config to Hive Conf: $key=xxx")
-          } else {
-            logDebug(s"Applying Hadoop and Hive config to Hive Conf: $key=$value")
-          }
-          hiveConf.set(key, value)
+      val hiveConf = new HiveConf(classOf[SessionState])
+      // 1: we set all confs in the hadoopConf to this hiveConf.
+      // This hadoopConf contains user settings in Hadoop's core-site.xml file
+      // and Hive's hive-site.xml file. Note, we load hive-site.xml file manually in
+      // SharedState and put settings in this hadoopConf instead of relying on HiveConf
+      // to load user settings. Otherwise, HiveConf's initialize method will override
+      // settings in the hadoopConf. This issue only shows up when spark.sql.hive.metastore.jars
+      // is not set to builtin. When spark.sql.hive.metastore.jars is builtin, the classpath
+      // has hive-site.xml. So, HiveConf will use that to override its default values.
+      hadoopConf.iterator().asScala.foreach { entry =>
+        val key = entry.getKey
+        val value = entry.getValue
+        if (key.toLowerCase.contains("password")) {
+          logDebug(s"Applying Hadoop and Hive config to Hive Conf: $key=xxx")
+        } else {
+          logDebug(s"Applying Hadoop and Hive config to Hive Conf: $key=$value")
         }
-        // HiveConf is a Hadoop Configuration, which has a field of classLoader and
-        // the initial value will be the current thread's context class loader
-        // (i.e. initClassLoader at here).
-        // We call initialConf.setClassLoader(initClassLoader) at here to make
-        // this action explicit.
-        hiveConf.setClassLoader(initClassLoader)
-        // 2: we set all spark confs to this hiveConf.
-        sparkConf.getAll.foreach { case (k, v) =>
-          if (k.toLowerCase.contains("password")) {
-            logDebug(s"Applying Spark config to Hive Conf: $k=xxx")
-          } else {
-            logDebug(s"Applying Spark config to Hive Conf: $k=$v")
-          }
-          hiveConf.set(k, v)
-        }
-        // 3: we set all entries in config to this hiveConf.
-        extraConfig.foreach { case (k, v) =>
-          if (k.toLowerCase.contains("password")) {
-            logDebug(s"Applying extra config to HiveConf: $k=xxx")
-          } else {
-            logDebug(s"Applying extra config to HiveConf: $k=$v")
-          }
-          hiveConf.set(k, v)
-        }
-        val state = new SessionState(hiveConf)
-        if (clientLoader.cachedHive != null) {
-          Hive.set(clientLoader.cachedHive.asInstanceOf[Hive])
-        }
-        SessionState.start(state)
-        state.out = new PrintStream(outputBuffer, true, "UTF-8")
-        state.err = new PrintStream(outputBuffer, true, "UTF-8")
-        state
+        hiveConf.set(key, value)
       }
+      // HiveConf is a Hadoop Configuration, which has a field of classLoader and
+      // the initial value will be the current thread's context class loader
+      // (i.e. initClassLoader at here).
+      // We call initialConf.setClassLoader(initClassLoader) at here to make
+      // this action explicit.
+      hiveConf.setClassLoader(initClassLoader)
+      // 2: we set all spark confs to this hiveConf.
+      sparkConf.getAll.foreach { case (k, v) =>
+        if (k.toLowerCase.contains("password")) {
+          logDebug(s"Applying Spark config to Hive Conf: $k=xxx")
+        } else {
+          logDebug(s"Applying Spark config to Hive Conf: $k=$v")
+        }
+        hiveConf.set(k, v)
+      }
+      // 3: we set all entries in config to this hiveConf.
+      extraConfig.foreach { case (k, v) =>
+        if (k.toLowerCase.contains("password")) {
+          logDebug(s"Applying extra config to HiveConf: $k=xxx")
+        } else {
+          logDebug(s"Applying extra config to HiveConf: $k=$v")
+        }
+        hiveConf.set(k, v)
+      }
+      val state = new SessionState(hiveConf, Utils.getCurrentUserName())
+      if (clientLoader.cachedHive != null) {
+        Hive.set(clientLoader.cachedHive.asInstanceOf[Hive])
+      }
+      SessionState.start(state)
+      state.out = new PrintStream(outputBuffer, true, "UTF-8")
+      state.err = new PrintStream(outputBuffer, true, "UTF-8")
+      state
     } finally {
       Thread.currentThread().setContextClassLoader(original)
     }
@@ -883,5 +864,43 @@ private[hive] class HiveClientImpl(
           .map(_.asScala.toMap).orNull),
         parameters =
           if (hp.getParameters() != null) hp.getParameters().asScala.toMap else Map.empty)
+  }
+
+  override def currentDatabase(): String = withHiveState(state.getCurrentDatabase)
+
+  private val authorizerV2 = withHiveState(state.getAuthorizerV2)
+
+  override def checkPrivileges(
+      hiveOpType: HiveOperationType,
+      inputObjs: JList[HivePrivilegeObject],
+      outputObjs: JList[HivePrivilegeObject],
+      context: HiveAuthzContext): Unit = withHiveState {
+    state.setIsHiveServerQuery(true)
+    if (authorizerV2 != null) {
+      try {
+        authorizerV2.checkPrivileges(hiveOpType, inputObjs, outputObjs, context)
+      } catch {
+        case hae: HiveAccessControlException =>
+          logError(
+            s"""
+               |+===============================+
+               ||Spark SQL Authorization Failure|
+               ||-------------------------------|
+               ||${hae.getMessage}
+               ||-------------------------------|
+               ||Spark SQL Authorization Failure|
+               |+===============================+
+                 """.stripMargin)
+          throw hae
+        case e: Exception => throw e
+      }
+    } else {
+      logWarning("Authorizer V2 not configured.")
+    }
+    hiveOpType match {
+      case HiveOperationType.SWITCHDATABASE =>
+        inputObjs.asScala.foreach(o => setCurrentDatabase(o.getDbname))
+      case _ =>
+    }
   }
 }
