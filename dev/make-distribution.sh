@@ -37,6 +37,7 @@ MAKE_PIP=false
 MAKE_R=false
 NAME=none
 MVN="$SPARK_HOME/build/mvn"
+RANGER=false
 
 function exit_with_usage {
   echo "make-distribution.sh - tool for making binary distributions of Spark"
@@ -82,6 +83,9 @@ while (( "$#" )); do
     --name)
       NAME="$2"
       shift
+      ;;
+    --ranger)
+      RANGER=true
       ;;
     --help)
       exit_with_usage
@@ -246,6 +250,11 @@ cp "$SPARK_HOME"/conf/*.template "$DISTDIR"/conf
 cp "$SPARK_HOME/README.md" "$DISTDIR"
 cp -r "$SPARK_HOME/bin" "$DISTDIR"
 cp -r "$SPARK_HOME/python" "$DISTDIR"
+
+# Copy ranger plugin jars
+if [ "$RANGER" == "true" ]; then
+  cp "$SPARK_HOME"/sql/ranger/target/jars/* "$DISTDIR/jars/"
+fi
 
 # Remove the python distribution from dist/ if we built it
 if [ "$MAKE_PIP" == "true" ]; then
