@@ -2617,13 +2617,6 @@
     </profile>
 
     <profile>
-      <id>ranger</id>
-      <modules>
-        <module>sql/ranger</module>
-      </modules>
-    </profile>
-
-    <profile>
       <id>scala-2.10</id>
       <activation>
         <property><name>scala-2.10</name></property>
