@@ -243,7 +243,7 @@
               <overWriteIfNewer>true</overWriteIfNewer>
               <useSubDirectoryPerType>true</useSubDirectoryPerType>
               <includeArtifactIds>
-                ranger-hive-plugin,ranger-plugin-classloader,ranger-plugin-audit,ranger-plugin-common,ranger-plugin-cred,ranger_solrj,javax.persistence,eclipselink,jersey-client,jersey-bundle,jersey-core,jersey-json,jersey-spring,noggit
+                ranger-hive-plugin,ranger-plugin-classloader,ranger-plugins-audit,ranger-plugins-common,ranger-plugins-cred,ranger_solrj,javax.persistence,eclipselink,jersey-client,jersey-bundle,jersey-core,jersey-json,jersey-spring,noggit
               </includeArtifactIds>
               <silent>true</silent>
             </configuration>
