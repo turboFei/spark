@@ -88,12 +88,60 @@ private[spark] object ToolTips {
        also create multiple RDDs internally. Cached RDDs are shown in green.
     """
 
-  val TASK_TIME =
-  "Shaded red when garbage collection (GC) time is over 10% of task time"
-
   val APPLICATION_EXECUTOR_LIMIT =
     """Maximum number of executors that this application will use. This limit is finite only when
        dynamic allocation is enabled. The number of granted executors may exceed the limit
        ephemerally when executors are being killed.
     """
+  // scalastyle:off
+  val ADDRESS =
+    """
+      |Executor地址(IP:端口)
+    """.stripMargin
+
+  val EXECUTOR_STATUS =
+    """
+      |Executor状态
+    """.stripMargin
+
+  val RDD_BLOCKS =
+    """
+      |Executor上存储的RDD Block个数
+    """.stripMargin
+
+  val DISK_USED =
+    """
+      |Executor使用的磁盘容量
+    """.stripMargin
+
+  val EXECUTOR_CORES =
+    """
+      |Executor申请的核数，可通过spark.executor.cores参数指定，反映了该Executor的并发能力
+    """.stripMargin
+
+  val ACTIVE_TASKS =
+    """
+      |Executor上正在运行的任务数
+    """.stripMargin
+
+  val FAILD_TASKS =
+    """
+      |Executor运行至今失败的任务数
+    """.stripMargin
+
+  val COMPLETE_TASKS =
+    """
+      |Executor运行至今完成的任务数
+    """.stripMargin
+
+  val TOTAL_TASKS =
+    """
+      |Executor运行至今处理过的任务数
+    """.stripMargin
+
+  val TASK_TIME =
+    """
+      |任务运行的时间，当GC的时间超过总时间占比的10%，则显示为红色
+    """.stripMargin
+  // scalastyle:on
 }
