@@ -247,6 +247,17 @@
         <enabled>false</enabled>
       </snapshots>
     </repository>
+
+    <repository>
+      <id>Spring IO</id>
+      <url>http://repo.spring.io/plugins-release/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
   </repositories>
   <pluginRepositories>
     <pluginRepository>
@@ -320,6 +331,14 @@
         <artifactId>chill-java</artifactId>
         <version>${chill.version}</version>
       </dependency>
+
+      <!-- https://mvnrepository.com/artifact/com.hadoop.gplcompression/hadoop-lzo -->
+      <dependency>
+        <groupId>com.hadoop.gplcompression</groupId>
+        <artifactId>hadoop-lzo</artifactId>
+        <version>cdh4-0.4.15-gplextras</version>
+      </dependency>
+
       <!-- This artifact is a shaded version of ASM 5.0.4. The POM that was used to produce this
            is at https://github.com/apache/geronimo-xbean/tree/xbean-4.4/xbean-asm5-shaded
            For context on why we shade ASM, see SPARK-782 and SPARK-6152. -->
