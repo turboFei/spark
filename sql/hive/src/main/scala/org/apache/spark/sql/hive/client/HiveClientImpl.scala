@@ -868,7 +868,28 @@ private[hive] class HiveClientImpl(
 
   override def currentDatabase(): String = withHiveState(state.getCurrentDatabase)
 
-  private val authorizerV2 = withHiveState(state.getAuthorizerV2)
+  private val authorizerV2 = withHiveState {
+    Option(Utils.getContextOrSparkClassLoader.getResource("ranger-hive-security.xml")) match {
+      case Some(url) =>
+        hadoopConf.addResource(url)
+        val dir = hadoopConf.get("ranger.plugin.hive.policy.cache.dir")
+        if (dir != null) {
+          val file = new File(dir)
+          if (!file.exists()) {
+            if (file.mkdirs()) {
+              logInfo("Creating ranger policy cache directory at " + file.getAbsolutePath)
+              file.deleteOnExit()
+            } else {
+              logWarning("Unable to create ranger policy cache directory at "
+                + file.getAbsolutePath)
+            }
+          }
+        }
+      case _ =>
+        logWarning("ranger-hive-security.xml not configured")
+    }
+    state.getAuthorizerV2
+  }
 
   override def checkPrivileges(
       hiveOpType: HiveOperationType,
