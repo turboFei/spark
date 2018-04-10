@@ -41,4 +41,4 @@ notifications:
 
 # 6. Run test
 script:
-  - build/mvn test -T 4 -q -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3 -Phive -Dmaven.javadoc.skip=true -B -V test
+  - travis_wait 30 build/mvn test -T 4 -q -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3 -Phive -Dmaven.javadoc.skip=true -B -V
