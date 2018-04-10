@@ -30,15 +30,10 @@ language: scala
 scala:
   - 2.11.8
 
-# 3. Setup cache directory for SBT and Maven.
-cache:
-  directories:
-  - $HOME/.m2
-
 # 4. Turn off notifications.
 notifications:
   email: yaooqinn@hotmail.com
 
 # 6. Run test
 script:
-  - travis_wait 30 build/mvn test -T 4 -q -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3 -Phive -Dmaven.javadoc.skip=true -B -V
+  - build/mvn test -T 4C -q -Dmaven.javadoc.skip=true -B -V
