@@ -239,7 +239,7 @@
 
     <repository>
       <id>twitter</id>
-      <name>Maven Repository</name>
+      <name>Twitter Repository</name>
       <url>http://maven.twttr.com/</url>
       <releases>
         <enabled>true</enabled>
