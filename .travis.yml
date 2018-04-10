@@ -36,4 +36,4 @@ notifications:
 
 # 6. Run test
 script:
-  - build/mvn test
+  - ./build/sbt test
