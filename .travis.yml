@@ -36,4 +36,4 @@ notifications:
 
 # 6. Run test
 script:
-  - build/mvn test -T 4C -q -Dmaven.javadoc.skip=true -B -V
+  - build/mvn test
