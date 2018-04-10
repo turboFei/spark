@@ -238,6 +238,18 @@
     </repository>
 
     <repository>
+      <id>twitter</id>
+      <name>Maven Repository</name>
+      <url>http://maven.twttr.com/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+
+    <repository>
       <id>SparkPackagesRepo</id>
       <url>http://dl.bintray.com/spark-packages/maven</url>
       <releases>
@@ -336,7 +348,7 @@
       <dependency>
         <groupId>com.hadoop.gplcompression</groupId>
         <artifactId>hadoop-lzo</artifactId>
-        <version>cdh4-0.4.15-gplextras</version>
+        <version>0.4.20</version>
       </dependency>
 
       <!-- This artifact is a shaded version of ASM 5.0.4. The POM that was used to produce this
