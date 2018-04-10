@@ -374,8 +374,6 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       (_, in) => new LimitedInputStream(in, 10000),
       2048,
       Int.MaxValue,
-      Int.MaxValue,
-      Int.MaxValue,
       true)
     // Blocks should be returned without exceptions.
     assert(Set(iterator.next()._1, iterator.next()._1) ===

@@ -37,13 +37,8 @@ cache:
 
 # 4. Turn off notifications.
 notifications:
-  email: false
-
-# 5. Run maven install before running lint-java.
-install:
-  - export MAVEN_SKIP_RC=1
-  - build/mvn -T 4 -q -DskipTests -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3  -Phive -Phive-thriftserver install
+  email: yaooqinn@hotmail.com
 
 # 6. Run test
 script:
-  - build/mvn -T 4 -q -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3 -Phive -Phive-thriftserver test
+  - build/mvn test -T 4 -q -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3 -Phive -Dmaven.javadoc.skip=true -B -V test
