@@ -238,8 +238,31 @@
     </repository>
 
     <repository>
+      <id>twitter</id>
+      <name>Twitter Repository</name>
+      <url>http://maven.twttr.com/</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+
+    <repository>
       <id>SparkPackagesRepo</id>
       <url>http://dl.bintray.com/spark-packages/maven</url>
+      <releases>
+        <enabled>true</enabled>
+      </releases>
+      <snapshots>
+        <enabled>false</enabled>
+      </snapshots>
+    </repository>
+
+    <repository>
+      <id>Spring IO</id>
+      <url>http://repo.spring.io/plugins-release/</url>
       <releases>
         <enabled>true</enabled>
       </releases>
@@ -319,6 +342,13 @@
         <groupId>com.twitter</groupId>
         <artifactId>chill-java</artifactId>
         <version>${chill.version}</version>
+      </dependency>
+
+      <!-- https://mvnrepository.com/artifact/com.hadoop.gplcompression/hadoop-lzo -->
+      <dependency>
+        <groupId>com.hadoop.gplcompression</groupId>
+        <artifactId>hadoop-lzo</artifactId>
+        <version>0.4.20</version>
       </dependency>
 
       <!-- This artifact is a shaded version of ASM 5.0.4. The POM that was used to produce this
