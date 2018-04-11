@@ -45,4 +45,4 @@ before_install: unset SBT_OPTS JVM_OPTS
 # 6. Run test
 script:
   - cat $HOME/.sbt/repositories
-  - build/sbt test -Dsbt.repository.config=$HOME/.sbt/repositories
+  - build/sbt test -Dsbt.override.build.repos=true -Dsbt.repository.config=./project/repositories
