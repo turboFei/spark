@@ -182,6 +182,10 @@
     <paranamer.version>2.8</paranamer.version>
     <maven-antrun.version>1.8</maven-antrun.version>
     <commons-crypto.version>1.0.0</commons-crypto.version>
+    <hadoop.lzo.version>0.4.20</hadoop.lzo.version>
+    <hadoop.lzo.scope>provided</hadoop.lzo.scope>
+    <spark.authorizer.version>1.1.1.spark2.1</spark.authorizer.version>
+    <spark.authorizer.scope>provided</spark.authorizer.scope>
 
     <test.java.home>${java.home}</test.java.home>
     <test.exclude.tags></test.exclude.tags>
@@ -348,7 +352,8 @@
       <dependency>
         <groupId>com.hadoop.gplcompression</groupId>
         <artifactId>hadoop-lzo</artifactId>
-        <version>0.4.20</version>
+        <version>${hadoop.lzo.version}</version>
+        <scope>${hadoop.lzo.scope}</scope>
       </dependency>
 
       <!-- This artifact is a shaded version of ASM 5.0.4. The POM that was used to produce this
@@ -2651,6 +2656,20 @@
       <modules>
         <module>sql/ranger</module>
       </modules>
+    </profile>
+
+    <profile>
+      <id>hadoop-lzo</id>
+      <properties>
+        <hadoop.lzo.scope>compile</hadoop.lzo.scope>
+      </properties>
+    </profile>
+
+    <profile>
+      <id>spark-authorizer</id>
+      <properties>
+        <spark.authorizer.scope>compile</spark.authorizer.scope>
+      </properties>
     </profile>
 
     <profile>

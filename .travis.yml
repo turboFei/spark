@@ -35,6 +35,7 @@ cache:
   directories:
   - $HOME/.sbt
   - $HOME/.m2
+  - $HOME/.ivy2
 
 # 4. Turn off notifications.
 notifications:
