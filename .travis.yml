@@ -44,4 +44,5 @@ notifications:
 before_install: unset SBT_OPTS JVM_OPTS
 # 6. Run test
 script:
-  - build/sbt test
+  - cat $HOME/.sbt/repositories
+  - build/sbt test -Dsbt.repository.config=$HOME/.sbt/repositories
