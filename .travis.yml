@@ -50,4 +50,4 @@ before_install:
 
 # 6. Run test
 script:
-  - build/sbt -Phadoop-2.6 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest test | grep -v  "^.*[info].*Resolving"
+  - travis_wait 30 build/sbt -Phadoop-2.6 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest test | grep -v  "^.*[info].*Resolving"
