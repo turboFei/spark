@@ -50,4 +50,4 @@ before_install:
 
 # 6. Run test
 script:
-  - build/sbt -Phadoop-2.6 -Pyarn -Pkafka-0-8 -Phive test:package
+  - build/sbt -Phadoop-2.6 -Pyarn -Pkafka-0-8 -Phive test
