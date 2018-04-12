@@ -248,8 +248,6 @@ object SparkBuild extends PomBuild {
     resolvers := Seq(
       DefaultMavenRepository,
       Resolver.mavenLocal,
-      "Twitter Repository" at "http://maven.twttr.com/",
-      "SparkPackagesRepo" at "http://dl.bintray.com/spark-packages/maven",
       Resolver.file("local", file(Path.userHome.absolutePath + "/.ivy2/local"))(Resolver.ivyStylePatterns)
     ),
     externalResolvers := resolvers.value,
