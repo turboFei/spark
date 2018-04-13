@@ -33,17 +33,23 @@ scala:
 # 3. Setup cache directory for SBT and Maven.
 cache:
   directories:
+  - $HOME/.sbt
   - $HOME/.m2
+  - $HOME/.ivy2
 
 # 4. Turn off notifications.
 notifications:
-  email: false
+  email: yaooqinn@hotmail.com
 
-# 5. Run maven install before running lint-java.
-install:
-  - export MAVEN_SKIP_RC=1
-  - build/mvn -T 4 -q -DskipTests -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3  -Phive -Phive-thriftserver install
+before_install:
+  - unset SBT_OPTS JVM_OPTS
+  - wget -P $HOME/.m2/repository/yaooqinn/spark-authorizer/1.1.3.spark2.1 http://dl.bintray.com/spark-packages/maven/yaooqinn/spark-authorizer/1.1.3.spark2.1/spark-authorizer-1.1.3.spark2.1.jar
+  - wget -P $HOME/.m2/repository/yaooqinn/spark-authorizer/1.1.3.spark2.1 http://dl.bintray.com/spark-packages/maven/yaooqinn/spark-authorizer/1.1.3.spark2.1/spark-authorizer-1.1.3.spark2.1.pom
+  - wget -P $HOME/.m2/repository/com/hadoop/gplcompression/hadoop-lzo/0.4.20 https://maven.twttr.com/com/hadoop/gplcompression/hadoop-lzo/0.4.20/hadoop-lzo-0.4.20.jar
+  - wget -P $HOME/.m2/repository/com/hadoop/gplcompression/hadoop-lzo/0.4.20 https://maven.twttr.com/com/hadoop/gplcompression/hadoop-lzo/0.4.20/hadoop-lzo-0.4.20.pom
 
 # 6. Run test
 script:
-  - build/mvn -T 4 -q -Pyarn -Phadoop-2.7 -Dhadoop.version=2.7.3 -Phive -Phive-thriftserver test
+  - build/sbt -Phadoop-2.6 -Pyarn -Pkafka-0-8 test:package | grep -v  "^.*[info].*Resolving"
+  - build/sbt -Phadoop-2.6 -Pyarn -Pkafka-0-8 -Phive assembly/package | grep -v  "^.*[info].*Resolving"
+  - build/sbt -Phadoop-2.6 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest core/test catalyst/test sql/test hive/test streaming/test mllib/test graphx/test network-common/test network-shuffle/test unsafe/test | grep -v  "^.*[info].*Resolving"
