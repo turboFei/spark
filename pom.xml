@@ -182,8 +182,6 @@
     <paranamer.version>2.8</paranamer.version>
     <maven-antrun.version>1.8</maven-antrun.version>
     <commons-crypto.version>1.0.0</commons-crypto.version>
-    <hadoop.lzo.version>0.4.20</hadoop.lzo.version>
-    <hadoop.lzo.scope>compile</hadoop.lzo.scope>
     <spark.authorizer.version>1.1.3.spark2.1</spark.authorizer.version>
     <spark.authorizer.scope>compile</spark.authorizer.scope>
 
@@ -346,14 +344,6 @@
         <groupId>com.twitter</groupId>
         <artifactId>chill-java</artifactId>
         <version>${chill.version}</version>
-      </dependency>
-
-      <!-- https://mvnrepository.com/artifact/com.hadoop.gplcompression/hadoop-lzo -->
-      <dependency>
-        <groupId>com.hadoop.gplcompression</groupId>
-        <artifactId>hadoop-lzo</artifactId>
-        <version>${hadoop.lzo.version}</version>
-        <scope>${hadoop.lzo.scope}</scope>
       </dependency>
 
       <!-- This artifact is a shaded version of ASM 5.0.4. The POM that was used to produce this
