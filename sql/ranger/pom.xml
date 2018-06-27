@@ -34,7 +34,7 @@
   <properties>
     <sbt.project.name>ranger-plugin</sbt.project.name>
     <ranger.base.version>0.5</ranger.base.version>
-    <ranger.netease.version>mammut414</ranger.netease.version>
+    <ranger.netease.version>mammut417</ranger.netease.version>
     <ranger.version>${ranger.base.version}-${ranger.netease.version}</ranger.version>
   </properties>
 
