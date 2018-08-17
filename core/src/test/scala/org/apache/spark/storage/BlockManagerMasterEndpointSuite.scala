@@ -37,23 +37,20 @@ import org.apache.spark.util.{ResetSystemProperties, SizeEstimator}
 class BlockManagerMasterEndpointSuite extends SparkFunSuite with Matchers with BeforeAndAfterEach
   with PrivateMethodTester with LocalSparkContext with ResetSystemProperties {
 
-  var context: SparkContext = null
-  var bm: BlockManager = null
-  var env: SparkEnv = null
-  var conf: SparkConf = null
-  var master: BlockManagerMaster = null
-  var bcastManager: BroadcastManager = null
-  // additional
-  var rpcEnv: RpcEnv = null
-  var securityMgr: SecurityManager = null
-  var mapOutputTracker: MapOutputTrackerMaster = null
-  var shuffleManager: SortShuffleManager = null
-  // Reuse a serializer across tests to avoid creating a new thread-local buffer on each test
-  var serializer: KryoSerializer = null
-  var memManager: UnifiedMemoryManager = null
-  var serializerManager: SerializerManager = null
-  // me
-  var bmme: BlockManagerMasterEndpoint = null
+  private var context: SparkContext = null
+  private var bm: BlockManager = null
+  private var env: SparkEnv = null
+  private var conf: SparkConf = null
+  private var master: BlockManagerMaster = null
+  private var bcastManager: BroadcastManager = null
+  private var rpcEnv: RpcEnv = null
+  private var securityMgr: SecurityManager = null
+  private var mapOutputTracker: MapOutputTrackerMaster = null
+  private var shuffleManager: SortShuffleManager = null
+  private var serializer: KryoSerializer = null
+  private var memManager: UnifiedMemoryManager = null
+  private var serializerManager: SerializerManager = null
+  private var bmme: BlockManagerMasterEndpoint = null
 
   private def makeBlockManager(
     maxMem: Long,
@@ -159,7 +156,6 @@ class BlockManagerMasterEndpointSuite extends SparkFunSuite with Matchers with B
         rpcEnv = null
       }
       if(mapOutputTracker != null) {
-//        mapOutputTracker.stop()
         mapOutputTracker = null
       }
       if(securityMgr != null) {
@@ -193,7 +189,7 @@ class BlockManagerMasterEndpointSuite extends SparkFunSuite with Matchers with B
       case e: Exception =>
         faile = true
     }
-    assert(faile == true, " remove success")
+    assert(faile == true, " remove broadcast false")
 
   }
   test( " test remove broadcast from blockmanager") {
@@ -207,7 +203,7 @@ class BlockManagerMasterEndpointSuite extends SparkFunSuite with Matchers with B
       case e: Exception =>
         faile = true
     }
-    assert(faile == true, " remove success")
+    assert(faile == true, " remove broadcast false")
 
   }
   test( " test remove broadcast from blockManagerMaster") {
@@ -221,7 +217,7 @@ class BlockManagerMasterEndpointSuite extends SparkFunSuite with Matchers with B
       case e: Exception =>
         faile = true
     }
-    assert(faile == true, " remove success")
+    assert(faile == true, " remove broadcast false")
 
   }
   test( " test remove broadcast from blockManagerMasterEndPoint") {
@@ -237,7 +233,7 @@ class BlockManagerMasterEndpointSuite extends SparkFunSuite with Matchers with B
       case e: Exception =>
         faile = true
     }
-    assert(faile == true, " remove success")
+    assert(faile == true, " remove  broadcast false")
   }
 
 }
