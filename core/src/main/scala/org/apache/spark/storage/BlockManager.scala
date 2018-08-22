@@ -19,37 +19,33 @@ package org.apache.spark.storage
 
 import java.io._
 import java.nio.ByteBuffer
-import java.nio.channels.Channels
 
+import com.google.common.io.ByteStreams
 import scala.collection.mutable
 import scala.collection.mutable.HashMap
-import scala.concurrent.{ExecutionContext, Future}
+import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.concurrent.duration._
 import scala.reflect.ClassTag
 import scala.util.Random
 import scala.util.control.NonFatal
+
 import org.apache.spark._
 import org.apache.spark.executor.{DataReadMethod, ShuffleWriteMetrics}
-import org.apache.spark.internal.{Logging, config}
+import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.memory.{MemoryManager, MemoryMode}
 import org.apache.spark.network._
-import org.apache.spark.network.buffer.ManagedBuffer
+import org.apache.spark.network.buffer.{ManagedBuffer, NettyManagedBuffer}
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.shuffle.ExternalShuffleClient
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo
 import org.apache.spark.rpc.RpcEnv
+import org.apache.spark.security.CryptoStreamUtils
 import org.apache.spark.serializer.{SerializerInstance, SerializerManager}
 import org.apache.spark.shuffle.ShuffleManager
 import org.apache.spark.storage.memory._
 import org.apache.spark.unsafe.Platform
 import org.apache.spark.util._
 import org.apache.spark.util.io.ChunkedByteBuffer
-import scala.concurrent.{Await, ExecutionContext, Future}
-import com.google.common.io.ByteStreams
-
-import org.apache.spark.internal.{config, Logging}
-import org.apache.spark.network.buffer.{ManagedBuffer, NettyManagedBuffer}
-import org.apache.spark.security.CryptoStreamUtils
 
 
 /* Class for returning a fetched block and associated metrics. */
