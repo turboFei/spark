@@ -29,11 +29,13 @@ import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.optimizer.Optimizer
 import org.apache.spark.sql.catalyst.parser.ParserInterface
 import org.apache.spark.sql.catalyst.plans.logical.LogicalPlan
+import org.apache.spark.sql.catalyst.rules.Rule
 import org.apache.spark.sql.execution._
 import org.apache.spark.sql.execution.command.AnalyzeTableCommand
 import org.apache.spark.sql.execution.datasources._
 import org.apache.spark.sql.streaming.{StreamingQuery, StreamingQueryManager}
 import org.apache.spark.sql.util.ExecutionListenerManager
+import org.apache.spark.util.Utils
 
 
 /**
@@ -65,7 +67,18 @@ private[sql] class SessionState(sparkSession: SparkSession) {
     hadoopConf
   }
 
-  lazy val experimentalMethods = new ExperimentalMethods
+  lazy val experimentalMethods = {
+    val em = new ExperimentalMethods
+    if (sparkSession.sparkContext.conf.getBoolean("spark.sql.authorization.enable", true)) {
+      import scala.reflect.runtime.{universe => ru}
+      val rule = "org.apache.spark.sql.catalyst.optimizer.Authorizer"
+      val mirror = ru.runtimeMirror(Utils.getContextOrSparkClassLoader)
+      val clazz = mirror.staticModule(rule)
+      val module = mirror.reflectModule(clazz)
+      em.extraOptimizations = Seq(module.instance.asInstanceOf[Rule[LogicalPlan]])
+    }
+    em
+  }
 
   /**
    * Internal catalog for managing functions registered by the user.
