@@ -17,8 +17,8 @@
 
 package org.apache.spark
 
-import org.scalatest.Matchers
 import org.scalatest.concurrent.Timeouts._
+import org.scalatest.Matchers
 import org.scalatest.time.{Millis, Span}
 
 import org.apache.spark.storage.{RDDBlockId, StorageLevel}
@@ -187,7 +187,7 @@ class DistributedSuite extends SparkFunSuite with Matchers with LocalSparkContex
     "caching in memory and disk, replicated" -> StorageLevel.MEMORY_AND_DISK_2,
     "caching in memory and disk, serialized, replicated" -> StorageLevel.MEMORY_AND_DISK_SER_2
   ).foreach { case (testName, storageLevel) =>
-    ignore(testName) {
+    test(testName) {
       testCaching(storageLevel)
     }
   }
