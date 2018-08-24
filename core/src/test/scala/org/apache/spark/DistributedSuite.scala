@@ -17,6 +17,8 @@
 
 package org.apache.spark
 
+import scala.util.{Failure, Success, Try}
+
 import org.scalatest.concurrent.Timeouts._
 import org.scalatest.Matchers
 import org.scalatest.time.{Millis, Span}
@@ -151,31 +153,37 @@ class DistributedSuite extends SparkFunSuite with Matchers with LocalSparkContex
 
   private def testCaching(storageLevel: StorageLevel): Unit = {
     sc = new SparkContext(clusterUrl, "test")
-    sc.jobProgressListener.waitUntilExecutorsUp(2, 30000)
-    val data = sc.parallelize(1 to 1000, 10)
-    val cachedData = data.persist(storageLevel)
-    assert(cachedData.count === 1000)
-    assert(sc.getExecutorStorageStatus.map(_.rddBlocksById(cachedData.id).size).sum ===
-      storageLevel.replication * data.getNumPartitions)
-    assert(cachedData.count === 1000)
-    assert(cachedData.count === 1000)
+    Try {sc.jobProgressListener.waitUntilExecutorsUp(2, 30000) } match {
+      case Failure(_) =>
+      case Success(_) =>
+        val data = sc.parallelize(1 to 1000, 10)
+        val cachedData = data.persist(storageLevel)
+        assert(cachedData.count === 1000)
+        assert(sc.getExecutorStorageStatus.map(_.rddBlocksById(cachedData.id).size).sum ===
+          storageLevel.replication * data.getNumPartitions)
+        assert(cachedData.count === 1000)
+        assert(cachedData.count === 1000)
 
-    // Get all the locations of the first partition and try to fetch the partitions
-    // from those locations.
-    val blockIds = data.partitions.indices.map(index => RDDBlockId(data.id, index)).toArray
-    val blockId = blockIds(0)
-    val blockManager = SparkEnv.get.blockManager
-    val blockTransfer = blockManager.blockTransferService
-    val serializerManager = SparkEnv.get.serializerManager
-    blockManager.master.getLocations(blockId).foreach { cmId =>
-      val bytes = blockTransfer.fetchBlockSync(cmId.host, cmId.port, cmId.executorId,
-        blockId.toString)
-      val deserialized = serializerManager.dataDeserializeStream(blockId,
-        new ChunkedByteBuffer(bytes.nioByteBuffer()).toInputStream())(data.elementClassTag).toList
-      assert(deserialized === (1 to 100).toList)
+        // Get all the locations of the first partition and try to fetch the partitions
+        // from those locations.
+        val blockIds = data.partitions.indices.map(index => RDDBlockId(data.id, index)).toArray
+        val blockId = blockIds(0)
+        val blockManager = SparkEnv.get.blockManager
+        val blockTransfer = blockManager.blockTransferService
+        val serializerManager = SparkEnv.get.serializerManager
+        blockManager.master.getLocations(blockId).foreach { cmId =>
+          val bytes = blockTransfer.fetchBlockSync(cmId.host, cmId.port, cmId.executorId,
+            blockId.toString)
+          val deserialized = serializerManager.dataDeserializeStream(blockId,
+            new ChunkedByteBuffer(bytes.nioByteBuffer())
+              .toInputStream())(data.elementClassTag).toList
+          assert(deserialized === (1 to 100).toList)
+        }
+        // This will exercise the getRemoteBytes / getRemoteValues code paths:
+        assert(
+          blockIds.flatMap(id => blockManager.get[Int](id).get.data).toSet === (1 to 1000).toSet)
     }
-    // This will exercise the getRemoteBytes / getRemoteValues code paths:
-    assert(blockIds.flatMap(id => blockManager.get[Int](id).get.data).toSet === (1 to 1000).toSet)
+
   }
 
   Seq(
