@@ -69,7 +69,7 @@ private[sql] class SessionState(sparkSession: SparkSession) {
 
   lazy val experimentalMethods = {
     val em = new ExperimentalMethods
-    if (sparkSession.sparkContext.conf.getBoolean("spark.sql.authorization.enable", true)) {
+    if (sparkSession.sparkContext.conf.getBoolean("spark.sql.authorization.enable", false)) {
       import scala.reflect.runtime.{universe => ru}
       val rule = "org.apache.spark.sql.catalyst.optimizer.Authorizer"
       val mirror = ru.runtimeMirror(Utils.getContextOrSparkClassLoader)
