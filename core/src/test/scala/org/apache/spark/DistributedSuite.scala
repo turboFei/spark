@@ -155,7 +155,7 @@ class DistributedSuite extends SparkFunSuite with Matchers with LocalSparkContex
     sc = new SparkContext(clusterUrl, "test")
     Try {sc.jobProgressListener.waitUntilExecutorsUp(2, 30000) } match {
       case Failure(_) =>
-      case Success(_) =>
+      case _ =>
         val data = sc.parallelize(1 to 1000, 10)
         val cachedData = data.persist(storageLevel)
         assert(cachedData.count === 1000)
