@@ -46,8 +46,10 @@ before_install:
   - wget -P $HOME/.m2/repository/yaooqinn/spark-authorizer/1.1.3.spark2.1 http://dl.bintray.com/spark-packages/maven/yaooqinn/spark-authorizer/1.1.3.spark2.1/spark-authorizer-1.1.3.spark2.1.jar
   - wget -P $HOME/.m2/repository/yaooqinn/spark-authorizer/1.1.3.spark2.1 http://dl.bintray.com/spark-packages/maven/yaooqinn/spark-authorizer/1.1.3.spark2.1/spark-authorizer-1.1.3.spark2.1.pom
 
+install:
+  - build/sbt -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Pkafka-0-8 -Phive test:package | grep -v  "^.*[info].*Resolving"
+  - build/sbt -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Pkafka-0-8 -Phive assembly/package | grep -v  "^.*[info].*Resolving"
+
 # 6. Run test
 script:
-  - build/sbt -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Pkafka-0-8 test:package | grep -v  "^.*[info].*Resolving"
-  - build/sbt -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Pkafka-0-8 -Phive assembly/package | grep -v  "^.*[info].*Resolving"
   - build/sbt -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest core/test catalyst/test sql/test hive/test streaming/test mllib/test graphx/test network-common/test network-shuffle/test unsafe/test
