@@ -50,5 +50,26 @@ install:
   - build/sbt -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Pkafka-0-8 -Phive assembly/package test:package | grep -v  "^.*[info].*Resolving"
 
 # 6. Run test
-script:
-  - build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest core/test catalyst/test sql/test hive/test streaming/test mllib/test graphx/test network-common/test network-shuffle/test unsafe/test
+
+jobs:
+  include:
+    - stage: core
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest core/test
+    - stage: catalyst
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest catalyst/test
+    - stage: sql
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest sql/test
+    - stage: hive
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest hive/test
+    - stage: streaming
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest streaming/test
+    - stage: ml
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest mllib/test
+    - stage: graphx
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest graphx/test
+    - stage: network
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest network-common/test
+    - stage: shuffle
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest network-shuffle/test
+    - stage: unsafe
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest,org.apache.spark.tags.ExtendedYarnTest unsafe/test
