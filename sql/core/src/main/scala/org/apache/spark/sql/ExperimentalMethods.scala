@@ -44,13 +44,6 @@ class ExperimentalMethods private[sql]() {
    * @since 1.3.0
    */
   @volatile var extraStrategies: Seq[Strategy] = Nil
-
-  import scala.reflect.runtime.{universe => ru}
-  private val rule = "org.apache.spark.sql.catalyst.optimizer.Authorizer"
-  private val mirror = ru.runtimeMirror(Utils.getContextOrSparkClassLoader)
-  private val clazz = mirror.staticModule(rule)
-  private val module = mirror.reflectModule(clazz)
-  @volatile var extraOptimizations: Seq[Rule[LogicalPlan]] = Seq(
-    module.instance.asInstanceOf[Rule[LogicalPlan]])
+  @volatile var extraOptimizations: Seq[Rule[LogicalPlan]] = Nil
 
 }

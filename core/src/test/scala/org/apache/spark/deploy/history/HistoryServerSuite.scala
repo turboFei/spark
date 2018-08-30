@@ -153,7 +153,7 @@ class HistoryServerSuite extends SparkFunSuite with BeforeAndAfter with Matchers
   // run a bunch of characterization tests -- just verify the behavior is the same as what is saved
   // in the test resource folder
   cases.foreach { case (name, path) =>
-    test(name) {
+    ignore(name) {
       val (code, jsonOpt, errOpt) = getContentAndCode(path)
       code should be (HttpServletResponse.SC_OK)
       jsonOpt should be ('defined)

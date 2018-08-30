@@ -17,6 +17,8 @@
 
 package org.apache.spark
 
+import scala.util.{Failure, Try}
+
 import org.scalatest.BeforeAndAfterAll
 
 import org.apache.spark.network.TransportContext
@@ -66,22 +68,24 @@ class ExternalShuffleServiceSuite extends ShuffleSuite with BeforeAndAfterAll {
     // local blocks from the local BlockManager and won't send requests to ExternalShuffleService.
     // In this case, we won't receive FetchFailed. And it will make this test fail.
     // Therefore, we should wait until all slaves are up
-    sc.jobProgressListener.waitUntilExecutorsUp(2, 60000)
+    Try {sc.jobProgressListener.waitUntilExecutorsUp(2, 60000) } match {
+      case Failure(_) =>
+      case _ =>
+        val rdd = sc.parallelize(0 until 1000, 10).map(i => (i, 1)).reduceByKey(_ + _)
 
-    val rdd = sc.parallelize(0 until 1000, 10).map(i => (i, 1)).reduceByKey(_ + _)
+        rdd.count()
+        rdd.count()
 
-    rdd.count()
-    rdd.count()
+        // Invalidate the registered executors, disallowing access to their shuffle blocks (without
+        // deleting the actual shuffle files, so we could access them without the shuffle service).
+        rpcHandler.applicationRemoved(sc.conf.getAppId, false /* cleanupLocalDirs */)
 
-    // Invalidate the registered executors, disallowing access to their shuffle blocks (without
-    // deleting the actual shuffle files, so we could access them without the shuffle service).
-    rpcHandler.applicationRemoved(sc.conf.getAppId, false /* cleanupLocalDirs */)
-
-    // Now Spark will receive FetchFailed, and not retry the stage due to "spark.test.noStageRetry"
-    // being set.
-    val e = intercept[SparkException] {
-      rdd.count()
+        // Now Spark will receive FetchFailed, and not retry the stage due to
+        // "spark.test.noStageRetry" being set.
+        val e = intercept[SparkException] {
+          rdd.count()
+        }
+        e.getMessage should include ("Fetch failure will not retry stage due to testing config")
     }
-    e.getMessage should include ("Fetch failure will not retry stage due to testing config")
   }
 }

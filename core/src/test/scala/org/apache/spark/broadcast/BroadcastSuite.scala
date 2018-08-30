@@ -225,44 +225,49 @@ class BroadcastSuite extends SparkFunSuite with LocalSparkContext {
       } catch {
         case e: Throwable =>
           _sc.stop()
-          throw e
+          null
       }
     } else {
       new SparkContext("local", "test")
     }
-    val blockManagerMaster = sc.env.blockManager.master
-    val list = List[Int](1, 2, 3, 4)
 
-    // Create broadcast variable
-    val broadcast = sc.broadcast(list)
-    afterCreation(broadcast.id, blockManagerMaster)
+    if (sc != null) doTest()
 
-    // Use broadcast variable on all executors
-    val partitions = 10
-    assert(partitions > numSlaves)
-    val results = sc.parallelize(1 to partitions, partitions).map(x => (x, broadcast.value.sum))
-    assert(results.collect().toSet === (1 to partitions).map(x => (x, list.sum)).toSet)
-    afterUsingBroadcast(broadcast.id, blockManagerMaster)
+    def doTest(): Unit = {
+      val blockManagerMaster = sc.env.blockManager.master
+      val list = List[Int](1, 2, 3, 4)
 
-    // Unpersist broadcast
-    if (removeFromDriver) {
-      broadcast.destroy(blocking = true)
-    } else {
-      broadcast.unpersist(blocking = true)
-    }
-    afterUnpersist(broadcast.id, blockManagerMaster)
+      // Create broadcast variable
+      val broadcast = sc.broadcast(list)
+      afterCreation(broadcast.id, blockManagerMaster)
 
-    // If the broadcast is removed from driver, all subsequent uses of the broadcast variable
-    // should throw SparkExceptions. Otherwise, the result should be the same as before.
-    if (removeFromDriver) {
-      // Using this variable on the executors crashes them, which hangs the test.
-      // Instead, crash the driver by directly accessing the broadcast value.
-      intercept[SparkException] { broadcast.value }
-      intercept[SparkException] { broadcast.unpersist() }
-      intercept[SparkException] { broadcast.destroy(blocking = true) }
-    } else {
+      // Use broadcast variable on all executors
+      val partitions = 10
+      assert(partitions > numSlaves)
       val results = sc.parallelize(1 to partitions, partitions).map(x => (x, broadcast.value.sum))
       assert(results.collect().toSet === (1 to partitions).map(x => (x, list.sum)).toSet)
+      afterUsingBroadcast(broadcast.id, blockManagerMaster)
+
+      // Unpersist broadcast
+      if (removeFromDriver) {
+        broadcast.destroy(blocking = true)
+      } else {
+        broadcast.unpersist(blocking = true)
+      }
+      afterUnpersist(broadcast.id, blockManagerMaster)
+
+      // If the broadcast is removed from driver, all subsequent uses of the broadcast variable
+      // should throw SparkExceptions. Otherwise, the result should be the same as before.
+      if (removeFromDriver) {
+        // Using this variable on the executors crashes them, which hangs the test.
+        // Instead, crash the driver by directly accessing the broadcast value.
+        intercept[SparkException] { broadcast.value }
+        intercept[SparkException] { broadcast.unpersist() }
+        intercept[SparkException] { broadcast.destroy(blocking = true) }
+      } else {
+        val results = sc.parallelize(1 to partitions, partitions).map(x => (x, broadcast.value.sum))
+        assert(results.collect().toSet === (1 to partitions).map(x => (x, list.sum)).toSet)
+      }
     }
   }
 }
