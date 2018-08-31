@@ -1283,22 +1283,22 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
 
     conf.set("spark.shuffle.service.enabled", "true")
     conf.set("spark.shuffle.service.port", shufflePort.toString)
-    conf.set("SHUFFLE_REGISTRATION_TIMEOUT", "40")
-    conf.set("SHUFFLE_REGISTRATION_MAX_ATTEMPTS", "1")
+    conf.set("spark.shuffle.registration.timeout", "40")
+    conf.set("spark.shuffle.registration.maxAttempts", "1")
     var e = intercept[SparkException]{
       makeBlockManager(8000, "executor1")
     }.getMessage
     assert(e.contains("TimeoutException"))
 
-    conf.set("SHUFFLE_REGISTRATION_TIMEOUT", "1000")
-    conf.set("SHUFFLE_REGISTRATION_MAX_ATTEMPTS", "1")
+    conf.set("spark.shuffle.registration.timeout", "1000")
+    conf.set("spark.shuffle.registration.maxAttempts", "1")
     e = intercept[SparkException]{
       makeBlockManager(8000, "executor2")
     }.getMessage
     assert(e.contains(tryAgainMsg))
 
-    conf.set("SHUFFLE_REGISTRATION_TIMEOUT", "1000")
-    conf.set("SHUFFLE_REGISTRATION_MAX_ATTEMPTS", "2")
+    conf.set("spark.shuffle.registration.timeout", "1000")
+    conf.set("spark.shuffle.registration.maxAttempts", "2")
     makeBlockManager(8000, "executor3")
     server.close()
   }
