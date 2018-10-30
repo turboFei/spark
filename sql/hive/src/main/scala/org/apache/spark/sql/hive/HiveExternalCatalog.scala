@@ -18,19 +18,18 @@
 package org.apache.spark.sql.hive
 
 import java.io.IOException
-
 import java.lang.reflect.InvocationTargetException
 import java.net.URI
+import java.security.AccessControlException
 import java.util
 
 import scala.collection.mutable
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.hive.metastore.api.MetaException
 import org.apache.hadoop.hive.ql.metadata.HiveException
 import org.apache.thrift.TException
-
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
@@ -184,14 +183,31 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
       databaseExists(db)
     } else {
       try {
-        getDatabase(db)
+        val database = getDatabase(db)
+        if(db !=null)
+           return true
+
       } catch {
-        case anaE: AnalysisException =>
-          return false
         case noDB: NoSuchDatabaseException =>
           return false
+        case analysisException: AnalysisException =>
+          if(analysisException.cause.get.isInstanceOf[HiveException]){
+            val he = analysisException.cause.get.asInstanceOf[HiveException]
+            if(he.getCause.isInstanceOf[MetaException]){
+              val me = he.getCause.asInstanceOf[MetaException]
+              if(me.getCause.isInstanceOf[AccessControlException]){
+                return  true
+              }
+            }
+          }
+        case e: Throwable =>
+          e.printStackTrace()
+          return false
+
+
       }
-      true
+      false
+
     }
   }
 
