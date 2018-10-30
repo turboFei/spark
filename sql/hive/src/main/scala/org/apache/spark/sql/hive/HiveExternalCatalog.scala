@@ -25,11 +25,13 @@ import java.util
 
 import scala.collection.mutable
 import scala.util.control.NonFatal
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.metastore.api.MetaException
 import org.apache.hadoop.hive.ql.metadata.HiveException
 import org.apache.thrift.TException
+
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
@@ -184,19 +186,22 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
     } else {
       try {
         val database = getDatabase(db)
-        if(db != null)
-           return true
+        if (db != null) {
+          return true
+        }
 
       } catch {
         case noDB: NoSuchDatabaseException =>
           return false
         case analysisException: AnalysisException =>
-          if (analysisException.cause.get.isInstanceOf[HiveException]){
+          if (analysisException.cause.get.isInstanceOf[HiveException]) {
             val he = analysisException.cause.get.asInstanceOf[HiveException]
-            if (he.getCause.isInstanceOf[MetaException]){
+            if (he.getCause.isInstanceOf[MetaException]) {
               val me = he.getCause.asInstanceOf[MetaException]
-              if (me.getMessage.contains("AccessControlException"))
+
+              if (me.getMessage.contains("AccessControlException")) {
                 return true
+              }
 
             }
           }
