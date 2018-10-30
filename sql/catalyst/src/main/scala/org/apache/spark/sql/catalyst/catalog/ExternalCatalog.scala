@@ -34,7 +34,7 @@ abstract class ExternalCatalog {
   import CatalogTypes.TablePartitionSpec
 
   protected def requireDbExists(db: String): Unit = {
-    if (!databaseExists(db)) {
+    if (!databaseExists(db, compatible = true)) {
       throw new NoSuchDatabaseException(db)
     }
   }
@@ -77,6 +77,8 @@ abstract class ExternalCatalog {
   def getDatabase(db: String): CatalogDatabase
 
   def databaseExists(db: String): Boolean
+
+  def databaseExists(db: String, compatible: Boolean): Boolean
 
   def listDatabases(): Seq[String]
 

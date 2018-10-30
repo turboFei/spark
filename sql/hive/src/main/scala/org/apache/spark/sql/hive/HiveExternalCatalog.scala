@@ -24,17 +24,15 @@ import java.util
 
 import scala.collection.mutable
 import scala.util.control.NonFatal
-
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.ql.metadata.HiveException
 import org.apache.thrift.TException
-
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
 import org.apache.spark.sql.catalyst.TableIdentifier
-import org.apache.spark.sql.catalyst.analysis.TableAlreadyExistsException
+import org.apache.spark.sql.catalyst.analysis.{NoSuchDatabaseException, TableAlreadyExistsException}
 import org.apache.spark.sql.catalyst.catalog._
 import org.apache.spark.sql.catalyst.catalog.ExternalCatalogUtils.escapePathName
 import org.apache.spark.sql.catalyst.expressions._
@@ -176,6 +174,25 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
 
   override def databaseExists(db: String): Boolean = withClient {
     client.databaseExists(db)
+  }
+
+  override def databaseExists(db: String, compatible: Boolean): Boolean = {
+    if(!compatible) {
+      databaseExists(db)
+    } else {
+      try {
+        val testTableName = "justForTest"
+        tableExists(db, testTableName)
+      } catch{
+        case anaE: AnalysisException =>
+          return false
+        case noDB: NoSuchDatabaseException =>
+          return false
+        case e:Exception =>
+          return true
+      }
+      true
+    }
   }
 
   override def listDatabases(): Seq[String] = withClient {
