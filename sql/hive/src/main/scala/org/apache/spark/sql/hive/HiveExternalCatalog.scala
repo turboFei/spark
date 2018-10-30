@@ -18,6 +18,7 @@
 package org.apache.spark.sql.hive
 
 import java.io.IOException
+
 import java.lang.reflect.InvocationTargetException
 import java.net.URI
 import java.util
@@ -183,8 +184,7 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
       databaseExists(db)
     } else {
       try {
-        val testTableName = "justForTest"
-        tableExists(db, testTableName)
+        getDatabase(db)
       } catch {
         case anaE: AnalysisException =>
           return false
