@@ -24,10 +24,12 @@ import java.util
 
 import scala.collection.mutable
 import scala.util.control.NonFatal
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.ql.metadata.HiveException
 import org.apache.thrift.TException
+
 import org.apache.spark.{SparkConf, SparkException}
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.AnalysisException
@@ -177,18 +179,18 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
   }
 
   override def databaseExists(db: String, compatible: Boolean): Boolean = {
-    if(!compatible) {
+    if (!compatible) {
       databaseExists(db)
     } else {
       try {
         val testTableName = "justForTest"
         tableExists(db, testTableName)
-      } catch{
+      } catch {
         case anaE: AnalysisException =>
           return false
         case noDB: NoSuchDatabaseException =>
           return false
-        case e:Exception =>
+        case _ =>
           return true
       }
       true
