@@ -80,10 +80,10 @@ class HiveExternalCatalogSuite extends ExternalCatalogSuite {
       schema = new StructType().add("col1", "int").add("col2", "string"),
       provider = Some("hive"))
     catalog.createTable(hiveTable, ignoreIfExists = false)
-    val dbName = " unknow_db_test"
+    val dbName = "unknow_db_test"
 
     val r = catalog.databaseExists(dbName, true)
-    assert( r==false)
+    assert(r == false)
 
   }
 }
