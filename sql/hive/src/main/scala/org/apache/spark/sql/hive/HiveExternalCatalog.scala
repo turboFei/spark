@@ -190,8 +190,6 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
           return false
         case noDB: NoSuchDatabaseException =>
           return false
-        case _ =>
-          return true
       }
       true
     }
