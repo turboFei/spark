@@ -202,12 +202,12 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
                           result = true
                         }
                       }
-                      case e: Throwable =>
+                      case _: Throwable =>
                         throw analysisException
                     }
 
                 }
-                case e: Throwable =>
+                case _: Throwable =>
                   throw analysisException
               }
             }
