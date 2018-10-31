@@ -195,8 +195,7 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
           analysisException.cause match {
             case Some(e) => {
               e match {
-                case he: HiveException => {
-                  if (he.getCause != null) {
+                case he: HiveException if (he.getCause != null) => {
                     he.getCause match {
                       case me: MetaException => {
                         if (me.getMessage != null && me.getMessage.contains("AccessControlException")) {
@@ -204,18 +203,17 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
                         }
                       }
                       case e: Throwable =>
-                        e.printStackTrace()
+                        throw analysisException
                     }
-                  }
+
                 }
                 case e: Throwable =>
-                  e.printStackTrace()
+                  throw analysisException
               }
             }
             case None =>
+              throw analysisException
           }
-        case e: Throwable =>
-          e.printStackTrace()
       }
       result
     }
