@@ -191,26 +191,29 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
           result = true
         }
       } catch {
+        case nodb: NoSuchDatabaseException =>
+          result = false
         case analysisException: AnalysisException =>
           analysisException.cause match {
-            case Some(e) => {
+            case Some(e) =>
               e match {
-                case he: HiveException if (he.getCause != null) => {
+                case he: HiveException if he.getCause != null =>
                     he.getCause match {
-                      case me: MetaException => {
-                        if (me.getMessage != null && me.getMessage.contains("AccessControlException")) {
+                      case me: MetaException =>
+                        if (me.getMessage != null &&
+                          me.getMessage.contains("AccessControlException")) {
                           result = true
                         }
-                      }
+
                       case _: Throwable =>
                         throw analysisException
                     }
 
-                }
+
                 case _: Throwable =>
                   throw analysisException
               }
-            }
+
             case None =>
               throw analysisException
           }
