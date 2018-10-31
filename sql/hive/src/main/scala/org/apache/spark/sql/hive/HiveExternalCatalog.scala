@@ -197,7 +197,7 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
             val he = analysisException.cause.get.asInstanceOf[HiveException]
             if (he.getCause.isInstanceOf[MetaException]) {
               val me = he.getCause.asInstanceOf[MetaException]
-              if (me.getMessage.contains("org.apache.hadoop.security.AccessControlException")) {
+              if (me.getMessage.contains("AccessControlException")) {
                 return true
               }
             }
