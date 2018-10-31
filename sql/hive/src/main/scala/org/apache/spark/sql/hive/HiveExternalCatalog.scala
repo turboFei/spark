@@ -186,7 +186,7 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
     } else {
       try {
         val database = getDatabase(db)
-        if (db != null) {
+        if (database != null) {
           return true
         }
       } catch {
