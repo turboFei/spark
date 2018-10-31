@@ -184,29 +184,40 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
     if (!compatible) {
       databaseExists(db)
     } else {
+      var result = false
       try {
         val database = getDatabase(db)
         if (database != null) {
-          return true
+          result = true
         }
       } catch {
-        case noDB: NoSuchDatabaseException =>
-          return false
         case analysisException: AnalysisException =>
-          if (analysisException.cause.get.isInstanceOf[HiveException]) {
-            val he = analysisException.cause.get.asInstanceOf[HiveException]
-            if (he.getCause.isInstanceOf[MetaException]) {
-              val me = he.getCause.asInstanceOf[MetaException]
-              if (me.getMessage.contains("AccessControlException")) {
-                return true
+          analysisException.cause match {
+            case Some(e) => {
+              e match {
+                case he: HiveException => {
+                  if (he.getCause != null) {
+                    he.getCause match {
+                      case me: MetaException => {
+                        if (me.getMessage != null && me.getMessage.contains("AccessControlException")) {
+                          result = true
+                        }
+                      }
+                      case e: Throwable =>
+                        e.printStackTrace()
+                    }
+                  }
+                }
+                case e: Throwable =>
+                  e.printStackTrace()
               }
             }
+            case None =>
           }
         case e: Throwable =>
           e.printStackTrace()
-          return false
       }
-      false
+      result
     }
   }
 
