@@ -54,7 +54,7 @@ install:
 jobs:
   include:
     - stage: core
-      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive core/test
+      script: ./build/sbt -mem 7680 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive core/test
     - stage: catalyst
       script: ./build/sbt -mem 4096 -Phadoop-2.7 -Dhadoop.version=2.7.3 -Pyarn -Phive catalyst/test
     - stage: sql
