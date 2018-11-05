@@ -26,6 +26,7 @@ import java.util
 import scala.collection.mutable
 import scala.util.control.NonFatal
 
+import org.apache.commons.lang.StringUtils
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.{FileSystem, Path}
 import org.apache.hadoop.hive.metastore.api.MetaException
@@ -181,44 +182,23 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
   }
 
   override def databaseExists(db: String, compatible: Boolean): Boolean = {
-    if (!compatible) {
-      databaseExists(db)
-    } else {
-      var result = false
-      try {
-        val database = getDatabase(db)
-        if (database != null) {
-          result = true
-        }
-      } catch {
-        case nodb: NoSuchDatabaseException =>
-          result = false
-        case analysisException: AnalysisException =>
-          analysisException.cause match {
-            case Some(e) =>
-              e match {
-                case he: HiveException if he.getCause != null =>
-                    he.getCause match {
-                      case me: MetaException =>
-                        if (me.getMessage != null &&
-                          me.getMessage.contains("AccessControlException")) {
-                          result = true
-                        }
-
-                      case _: Throwable =>
-                        throw analysisException
-                    }
-
-
-                case _: Throwable =>
-                  throw analysisException
-              }
-
-            case None =>
-              throw analysisException
-          }
+    def isACLException(ae: AnalysisException): Boolean = {
+      ae.getCause match {
+        case he: HiveException if he.getCause != null && he.getCause.isInstanceOf[MetaException] =>
+          StringUtils.contains(he.getCause.asInstanceOf[MetaException].getMessage,
+            "AccessControlException")
+        case _ => false
       }
-      result
+    }
+
+    if (compatible) {
+      try {
+        databaseExists(db)
+      } catch {
+        case ae: AnalysisException if isACLException(ae) => true
+      }
+    } else {
+      databaseExists(db)
     }
   }
 
