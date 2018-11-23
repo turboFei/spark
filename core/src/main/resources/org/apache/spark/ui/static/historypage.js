@@ -123,6 +123,7 @@ $(document).ready(function() {
         if (app["attempts"].length > 1) {
             hasMultipleAttempts = true;
         }
+        var num = app["attempts"].length;
         for (j in app["attempts"]) {
           var attempt = app["attempts"][j];
           attempt["startTime"] = formatTimeMillis(attempt["startTimeEpoch"]);
@@ -132,8 +133,14 @@ $(document).ready(function() {
             (attempt.hasOwnProperty("attemptId") ? attempt["attemptId"] + "/" : "") + "logs";
           attempt["durationMillisec"] = attempt["duration"];
           attempt["duration"] = formatDuration(attempt["duration"]);
+          var id2 = id;
+          var attemptId = "";
+          if("attemptId" in attempt){
+              attemptId = attempt["attemptId"];
+              id2 = id + "/" + attemptId
+          }
           var app_clone = {
-                "id" : '<span title="'+id+'"><a href="'+uiRoot+'/history/'+id2 +'/jobs/">'+id+'</a></span>',
+                "id" : '<span title="'+id+'"><a href="'+uiRoot+'/history/'+num +'/jobs/">'+id+'</a></span>',
                 "name" : name,
                 "attemptId":'<a href="'+ uiRoot +'/history/'+id2 +'/jobs/">'+attemptId+'</a>',
                 "download":'<a href="'+uiRoot+'/api/v1/applications/'+id2 +'/logs" class="btn btn-info btn-mini">Download</a>',
