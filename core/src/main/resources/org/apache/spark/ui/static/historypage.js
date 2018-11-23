@@ -100,7 +100,9 @@ $(document).ready(function() {
     $.extend( $.fn.dataTable.defaults, {
       stateSave: true,
       lengthMenu: [[20,40,60,100,-1], [20, 40, 60, 100, "All"]],
-      pageLength: 20
+      pageLength: 20,
+      deferRender: true,
+      scroller:true
     });
 
     historySummary = $("#history-summary");
@@ -121,7 +123,6 @@ $(document).ready(function() {
         if (app["attempts"].length > 1) {
             hasMultipleAttempts = true;
         }
-        var num = app["attempts"].length;
         for (j in app["attempts"]) {
           var attempt = app["attempts"][j];
           attempt["startTime"] = formatTimeMillis(attempt["startTimeEpoch"]);
@@ -131,7 +132,16 @@ $(document).ready(function() {
             (attempt.hasOwnProperty("attemptId") ? attempt["attemptId"] + "/" : "") + "logs";
           attempt["durationMillisec"] = attempt["duration"];
           attempt["duration"] = formatDuration(attempt["duration"]);
-          var app_clone = {"id" : id, "name" : name, "num" : num, "attempts" : [attempt]};
+          var app_clone = {
+                "id" : '<span title="'+id+'"><a href="'+uiRoot+'/history/'+id2 +'/jobs/">'+id+'</a></span>',
+                "name" : name,
+                "attemptId":'<a href="'+ uiRoot +'/history/'+id2 +'/jobs/">'+attemptId+'</a>',
+                "download":'<a href="'+uiRoot+'/api/v1/applications/'+id2 +'/logs" class="btn btn-info btn-mini">Download</a>',
+                "duration":formatDuration(attempt["duration"]),
+                "startTime":attempt["startTime"],
+                "endTime": attempt["endTime"],
+                "lastUpdated": attempt["lastUpdated"],
+                "sparkUser":attempt["sparkUser"]};
           array.push(app_clone);
         }
       }
@@ -139,43 +149,39 @@ $(document).ready(function() {
         $.fn.dataTable.defaults.paging = false;
       }
 
-      var data = {
-        "uiroot": uiRoot,
-        "applications": array,
-        "hasMultipleAttempts": hasMultipleAttempts,
-        "showCompletedColumns": !requestedIncomplete,
-      }
 
       $.get(uiRoot + "/static/historypage-template.html", function(template) {
-        var sibling = historySummary.prev();
-        historySummary.detach();
-        var apps = $(Mustache.render($(template).filter("#history-summary-template").html(),data));
+
+        historySummary.append(Mustache.render($(template).filter("#history-summary-template").html()));
+        var selector = "#history-summary-table";
         var attemptIdColumnName = 'attemptId';
         var startedColumnName = 'started';
         var defaultSortColumn = completedColumnName = 'completed';
         var durationColumnName = 'duration';
+
         var conf = {
           "columns": [
-            {name: 'appId', type: "appid-numeric"},
-            {name: 'appName'},
-            {name: attemptIdColumnName},
-            {name: startedColumnName},
-            {name: completedColumnName},
-            {name: durationColumnName, type: "title-numeric"},
-            {name: 'user'},
-            {name: 'lastUpdated'},
-            {name: 'eventLog'},
+            {name: 'appId', type: "appid-numeric", "data": "id"},
+            {name: 'appName', "data": "name"},
+            {name: attemptIdColumnName, "data": "attemptId"},
+            {name: startedColumnName, "data": "startTime"},
+            {name: completedColumnName, "data": "endTime"},
+            {name: durationColumnName, type: "title-numeric", "data": "duration"},
+            {name: 'user', "data": "sparkUser"},
+            {name: 'lastUpdated', "data": "lastUpdated"},
+            {name: 'eventLog', "data": "download"},
           ],
           "autoWidth": false,
+          "data": array
         };
 
         if (hasMultipleAttempts) {
-          conf.rowsGroup = [
-            'appId:name',
-            'appName:name'
-          ];
+            conf.rowsGroup = [
+                'appId:name',
+                'appName:name'
+            ];
         } else {
-          conf.columns = removeColumnByName(conf.columns, attemptIdColumnName);
+            conf.columns = removeColumnByName(conf.columns, attemptIdColumnName);
         }
 
         var defaultSortColumn = completedColumnName;
@@ -188,9 +194,7 @@ $(document).ready(function() {
         conf.columnDefs = [
           {"searchable": false, "targets": [getColumnIndex(conf.columns, durationColumnName)]}
         ];
-        historySummary.append(apps);
-        apps.DataTable(conf);
-        sibling.after(historySummary);
+        $(selector).DataTable(conf);
         $('#history-summary [data-toggle="tooltip"]').tooltip();
       });
     });
