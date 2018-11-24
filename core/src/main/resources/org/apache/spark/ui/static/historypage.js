@@ -152,14 +152,18 @@ $(document).ready(function() {
           array.push(app_clone);
         }
       }
-      if(array.length < 20) {
-        $.fn.dataTable.defaults.paging = false;
-      }
+        if(array.length < 20) {
+         $.fn.dataTable.defaults.paging = false;
+        }
 
+         var  data = {
+            "hasMultipleAttempts": hasMultipleAttempts,
+            "showCompletedColumns": !requestedIncomplete,
+        }
 
-      $.get(uiRoot + "/static/historypage-template.html", function(template) {
+        $.get(uiRoot + "/static/historypage-template.html", function(template) {
 
-        historySummary.append(Mustache.render($(template).filter("#history-summary-template").html()));
+        historySummary.append(Mustache.render($(template).filter("#history-summary-template").html(), data));
         var selector = "#history-summary-table";
         var attemptIdColumnName = 'attemptId';
         var startedColumnName = 'started';
