@@ -115,6 +115,9 @@ private class UnsafeRowSerializerInstance(
             case e: EOFException =>
               dIn.close()
               EOF
+            case ioe: IOException =>
+              dIn.close()
+              throw ioe
           }
 
           private[this] var rowSize: Int = readSize()

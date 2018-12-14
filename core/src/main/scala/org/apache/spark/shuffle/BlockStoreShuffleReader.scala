@@ -17,10 +17,12 @@
 
 package org.apache.spark.shuffle
 
+import java.io.{IOException, InputStream}
+
 import org.apache.spark._
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.serializer.SerializerManager
-import org.apache.spark.storage.{BlockManager, ShuffleBlockFetcherIterator}
+import org.apache.spark.storage.{BlockId, BlockManager, BlockManagerId, ShuffleBlockFetcherIterator, ShuffleBlockId}
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.ExternalSorter
 
@@ -58,11 +60,27 @@ private[spark] class BlockStoreShuffleReader[K, C](
     val serializerInstance = dep.serializer.newInstance()
 
     // Create a key/value iterator for each stream
-    val recordIter = wrappedStreams.flatMap { case (blockId, wrappedStream) =>
+    val recordIter = wrappedStreams.flatMap { case (blockId, blockManagerId, wrappedStream) =>
       // Note: the asKeyValueIterator below wraps a key/value iterator inside of a
       // NextIterator. The NextIterator makes sure that close() is called on the
       // underlying InputStream when all records have been read.
-      serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
+      wrappedStreams2Iter(blockId, blockManagerId, wrappedStream)
+    }
+
+    def wrappedStreams2Iter(blockId: BlockId, address: BlockManagerId, wrappedStream: InputStream): Iterator[(Any, Any)] = {
+      try {
+        serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
+      } catch {
+        case ioe: IOException =>
+          wrappedStream.close()
+          blockId match {
+            case ShuffleBlockId(shufId, mapId, reduceId) =>
+              throw new FetchFailedException(address, shufId.toInt, mapId.toInt, reduceId, ioe)
+            case _ =>
+              throw new SparkException(
+                "Failed to get block " + blockId + ", which is not a shuffle block", ioe)
+          }
+      }
     }
 
     // Update the context task metrics for each record read.

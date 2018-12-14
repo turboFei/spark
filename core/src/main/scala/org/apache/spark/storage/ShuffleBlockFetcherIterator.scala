@@ -70,7 +70,7 @@ final class ShuffleBlockFetcherIterator(
     maxBlocksInFlightPerAddress: Int,
     maxReqSizeShuffleToMem: Long,
     detectCorrupt: Boolean)
-  extends Iterator[(BlockId, InputStream)] with DownloadFileManager with Logging {
+  extends Iterator[(BlockId, BlockManagerId, InputStream)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._
 
@@ -375,7 +375,7 @@ final class ShuffleBlockFetcherIterator(
    *
    * Throws a FetchFailedException if the next block could not be fetched.
    */
-  override def next(): (BlockId, InputStream) = {
+  override def next(): (BlockId, BlockManagerId, InputStream) = {
     if (!hasNext) {
       throw new NoSuchElementException
     }
@@ -423,20 +423,22 @@ final class ShuffleBlockFetcherIterator(
               throwFetchFailedException(blockId, address, e)
           }
 
-          input = streamWrapper(blockId, in)
-          // Only copy the stream if it's wrapped by compression or encryption, also the size of
-          // block is small (the decompressed block is smaller than maxBytesInFlight)
-          if (detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
-            val originalInput = input
-            val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
-            try {
+          var isStreamCopied: Boolean = false
+          try {
+            input = streamWrapper(blockId, in)
+            // Only copy the stream if it's wrapped by compression or encryption, also the size of
+            // block is small (the decompressed block is smaller than maxBytesInFlight)
+            if (detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
+              isStreamCopied = true
+              val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
               // Decompress the whole block at once to detect any corruption, which could increase
               // the memory usage tne potential increase the chance of OOM.
               // TODO: manage the memory used here, and spill it into disk in case of OOM.
               Utils.copyStream(input, out)
               out.close()
               input = out.toChunkedByteBuffer.toInputStream(dispose = true)
-            } catch {
+            }
+          } catch {
               case e: IOException =>
                 buf.release()
                 if (buf.isInstanceOf[FileSegmentManagedBuffer]
@@ -450,7 +452,7 @@ final class ShuffleBlockFetcherIterator(
                 }
             } finally {
               // TODO: release the buf here to free memory earlier
-              originalInput.close()
+            if( isStreamCopied){
               in.close()
             }
           }
@@ -464,7 +466,7 @@ final class ShuffleBlockFetcherIterator(
     }
 
     currentResult = result.asInstanceOf[SuccessFetchResult]
-    (currentResult.blockId, new BufferReleasingInputStream(input, this))
+    (currentResult.blockId, currentResult.address, new BufferReleasingInputStream(input, this))
   }
 
   private def fetchUpToMaxBytes(): Unit = {
@@ -618,4 +620,5 @@ object ShuffleBlockFetcherIterator {
       address: BlockManagerId,
       e: Throwable)
     extends FetchResult
+
 }
