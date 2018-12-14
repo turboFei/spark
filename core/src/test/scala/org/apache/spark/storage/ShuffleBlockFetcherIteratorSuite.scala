@@ -118,7 +118,7 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
 
     for (i <- 0 until 5) {
       assert(iterator.hasNext, s"iterator should have 5 elements but actually has $i elements")
-      val (blockId, inputStream) = iterator.next()
+      val (blockId, address, inputStream) = iterator.next()
 
       // Make sure we release buffers when a wrapped input stream is closed.
       val mockBuf = localBlocks.getOrElse(blockId, remoteBlocks(blockId))
@@ -329,7 +329,7 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
     sem.acquire()
 
     // The first block should be returned without an exception
-    val (id1, _) = iterator.next()
+    val (id1, _, _) = iterator.next()
     assert(id1 === ShuffleBlockId(0, 0, 0))
 
     when(transfer.fetchBlocks(any(), any(), any(), any(), any(), any()))
@@ -456,11 +456,11 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
     sem.acquire()
 
     // The first block should be returned without an exception
-    val (id1, _) = iterator.next()
+    val (id1, _, _) = iterator.next()
     assert(id1 === ShuffleBlockId(0, 0, 0))
-    val (id2, _) = iterator.next()
+    val (id2, _, _) = iterator.next()
     assert(id2 === ShuffleBlockId(0, 1, 0))
-    val (id3, _) = iterator.next()
+    val (id3, _, _) = iterator.next()
     assert(id3 === ShuffleBlockId(0, 2, 0))
   }
 

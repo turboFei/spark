@@ -70,7 +70,7 @@ final class ShuffleBlockFetcherIterator(
     maxBlocksInFlightPerAddress: Int,
     maxReqSizeShuffleToMem: Long,
     detectCorrupt: Boolean)
-  extends Iterator[(BlockId, BlockManagerId, InputStream)] with DownloadFileManager with Logging {
+  extends Iterator[(BlockId, InputStream, BlockManagerId)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._
 
@@ -375,7 +375,7 @@ final class ShuffleBlockFetcherIterator(
    *
    * Throws a FetchFailedException if the next block could not be fetched.
    */
-  override def next(): (BlockId, BlockManagerId, InputStream) = {
+  override def next(): (BlockId, InputStream, BlockManagerId) = {
     if (!hasNext) {
       throw new NoSuchElementException
     }
@@ -466,7 +466,7 @@ final class ShuffleBlockFetcherIterator(
     }
 
     currentResult = result.asInstanceOf[SuccessFetchResult]
-    (currentResult.blockId, currentResult.address, new BufferReleasingInputStream(input, this))
+    (currentResult.blockId, new BufferReleasingInputStream(input, this), currentResult.address)
   }
 
   private def fetchUpToMaxBytes(): Unit = {
