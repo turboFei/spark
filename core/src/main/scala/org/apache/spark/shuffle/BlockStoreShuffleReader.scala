@@ -17,12 +17,13 @@
 
 package org.apache.spark.shuffle
 
-import java.io.{IOException, InputStream}
+import java.io.{InputStream, IOException}
 
 import org.apache.spark._
 import org.apache.spark.internal.{config, Logging}
 import org.apache.spark.serializer.SerializerManager
-import org.apache.spark.storage.{BlockId, BlockManager, BlockManagerId, ShuffleBlockFetcherIterator, ShuffleBlockId}
+import org.apache.spark.storage.{BlockId, BlockManager, BlockManagerId,
+  ShuffleBlockFetcherIterator, ShuffleBlockId}
 import org.apache.spark.util.CompletionIterator
 import org.apache.spark.util.collection.ExternalSorter
 
@@ -67,7 +68,8 @@ private[spark] class BlockStoreShuffleReader[K, C](
       wrappedStreams2Iter(blockId, blockManagerId, wrappedStream)
     }
 
-    def wrappedStreams2Iter(blockId: BlockId, address: BlockManagerId, wrappedStream: InputStream): Iterator[(Any, Any)] = {
+    def wrappedStreams2Iter(blockId: BlockId, address: BlockManagerId,
+            wrappedStream: InputStream): Iterator[(Any, Any)] = {
       try {
         serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
       } catch {

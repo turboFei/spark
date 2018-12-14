@@ -452,7 +452,7 @@ final class ShuffleBlockFetcherIterator(
                 }
             } finally {
               // TODO: release the buf here to free memory earlier
-            if( isStreamCopied){
+            if ( isStreamCopied) {
               in.close()
             }
           }
