@@ -68,14 +68,14 @@ private[spark] class BlockStoreShuffleReader[K, C](
       try {
         serializerInstance.deserializeStream(wrappedStream).asKeyValueIterator
       } catch {
-        case ioe: IOException =>
+        case sce: StreamCorruptException =>
           wrappedStream.close()
           blockId match {
             case ShuffleBlockId(shufId, mapId, reduceId) =>
-              throw new FetchFailedException(address, shufId.toInt, mapId.toInt, reduceId, ioe)
+              throw new FetchFailedException(address, shufId.toInt, mapId.toInt, reduceId, sce)
             case _ =>
               throw new SparkException(
-                "Failed to get block " + blockId + ", which is not a shuffle block", ioe)
+                "Failed to get block " + blockId + ", which is not a shuffle block", sce)
           }
       }
     }

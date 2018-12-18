@@ -25,6 +25,7 @@ import scala.reflect.ClassTag
 import com.google.common.io.ByteStreams
 
 import org.apache.spark.serializer.{DeserializationStream, SerializationStream, Serializer, SerializerInstance}
+import org.apache.spark.shuffle.StreamCorruptException
 import org.apache.spark.sql.catalyst.expressions.UnsafeRow
 import org.apache.spark.sql.execution.metric.SQLMetric
 import org.apache.spark.unsafe.Platform
@@ -117,7 +118,7 @@ private class UnsafeRowSerializerInstance(
               EOF
             case ioe: IOException =>
               dIn.close()
-              throw ioe
+              throw new StreamCorruptException("stream is corrupted", ioe)
           }
 
           private[this] var rowSize: Int = readSize()
