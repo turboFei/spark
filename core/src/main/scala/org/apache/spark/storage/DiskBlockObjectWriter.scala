@@ -19,11 +19,14 @@ package org.apache.spark.storage
 
 import java.io.{BufferedOutputStream, File, FileOutputStream, OutputStream}
 import java.nio.channels.FileChannel
+import java.util.ArrayList
 
 import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer.{SerializationStream, SerializerInstance, SerializerManager}
 import org.apache.spark.util.Utils
+
+import scala.collection.mutable.ListBuffer
 
 /**
  * A class for writing JVM objects directly to a file on disk. This class allows data to be appended
@@ -240,6 +243,43 @@ private[spark] class DiskBlockObjectWriter(
     objOut.writeKey(key)
     objOut.writeValue(value)
     recordWritten()
+  }
+
+
+  def writeSplitFileSegments(key: Any, value: Any, segmentLengths: ListBuffer[Long],
+                             detectCorrupt: Boolean, splitThreshold: Long): Unit = {
+    if (!streamOpen) {
+      open()
+    }
+
+    val prePosition = fos.getChannel.position()
+    objOut.writeKey(key)
+    objOut.writeValue(value)
+    recordWritten()
+    val curPosition = fos.getChannel.position()
+    if (detectCorrupt && curPosition - committedPosition >= splitThreshold && prePosition > committedPosition) {
+      // NOTE: Because Kryo doesn't flush the underlying stream we explicitly flush both the
+      //       serializer stream and the lower level stream.
+      objOut.flush()
+      bs.flush()
+      objOut.close()
+      streamOpen = false
+
+      if (syncWrites) {
+        // Force outstanding writes to disk and track how long it takes
+        val start = System.nanoTime()
+        fos.getFD.sync()
+        writeMetrics.incWriteTime(System.nanoTime() - start)
+      }
+
+      val fileSegment = new FileSegment(file, committedPosition, prePosition - committedPosition)
+      committedPosition = prePosition
+      // In certain compression codecs, more bytes are written after streams are closed
+      writeMetrics.incBytesWritten(committedPosition - reportedPosition)
+      reportedPosition = committedPosition
+      numRecordsWritten = 0
+      segmentLengths += fileSegment.length
+    }
   }
 
   override def write(b: Int): Unit = throw new UnsupportedOperationException()

@@ -57,6 +57,11 @@ case class ShuffleBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends Blo
 }
 
 @DeveloperApi
+case class ShuffleSplitBlockId(shuffleId: Int, mapId: Int, reduceId: Int, splitId: Int) extends BlockId {
+  override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + "_" + splitId
+}
+
+@DeveloperApi
 case class ShuffleDataBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".data"
 }

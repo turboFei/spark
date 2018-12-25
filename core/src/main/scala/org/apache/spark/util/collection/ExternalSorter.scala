@@ -18,18 +18,17 @@
 package org.apache.spark.util.collection
 
 import java.io._
-import java.util.Comparator
+import java.util
+import java.util.{Comparator, ArrayList => AList}
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
-
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import com.google.common.io.ByteStreams
-
 import org.apache.spark._
 import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.serializer._
-import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter}
+import org.apache.spark.storage.{BlockId, DiskBlockObjectWriter, FileSegment}
 
 /**
  * Sorts and potentially merges a number of key-value pairs of type (K, V) to produce key-combiner
@@ -710,6 +709,61 @@ private[spark] class ExternalSorter[K, V, C](
           }
           val segment = writer.commitAndGet()
           lengths(id) = segment.length
+        }
+      }
+    }
+
+    writer.close()
+    context.taskMetrics().incMemoryBytesSpilled(memoryBytesSpilled)
+    context.taskMetrics().incDiskBytesSpilled(diskBytesSpilled)
+    context.taskMetrics().incPeakExecutionMemory(peakMemoryUsedBytes)
+
+    lengths
+  }
+
+  /**
+    * Write all the data added into this ExternalSorter into a file in the disk store. This is
+    * called by the SortShuffleWriter.
+    *
+    * @param blockId block ID to write to. The index file will be blockId.name + ".index".
+    * @return array of lengths, in bytes, of each partition of the file (used by map output tracker)
+    */
+  def writePartitionedFile(
+                            blockId: BlockId,
+                            outputFile: File,
+                            detectCorrupt: Boolean,
+                            splitThreshold: Long): Array[ListBuffer[Long]] = {
+
+    // Track location of each range in the output file
+    val lengths = new Array[ListBuffer[Long]](numPartitions)
+    val writer = blockManager.getDiskWriter(blockId, outputFile, serInstance, fileBufferSize,
+      context.taskMetrics().shuffleWriteMetrics)
+
+    if (spills.isEmpty) {
+      // Case where we only have in-memory data
+      val collection = if (aggregator.isDefined) map else buffer
+      val it = collection.destructiveSortedWritablePartitionedIterator(comparator)
+      while (it.hasNext) {
+        val partitionId = it.nextPartition()
+        val segmentLengths = new ListBuffer[Long]()
+        while (it.hasNext && it.nextPartition() == partitionId) {
+          it.writeNextSplitFileSegments(writer, segmentLengths, detectCorrupt, splitThreshold)
+        }
+        val segment = writer.commitAndGet()
+        segmentLengths += segment.length
+        lengths(partitionId) = segmentLengths
+      }
+    } else {
+      // We must perform merge-sort; get an iterator by partition and write everything directly.
+      for ((id, elements) <- this.partitionedIterator) {
+        val segmentLengths = new ListBuffer[Long]()
+        if (elements.hasNext) {
+          for (elem <- elements) {
+            writer.writeSplitFileSegments(elem._1, elem._2, segmentLengths, detectCorrupt, splitThreshold)
+          }
+          val segment = writer.commitAndGet()
+          segmentLengths += segment.length
+          lengths(id) = segmentLengths
         }
       }
     }

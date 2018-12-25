@@ -17,9 +17,11 @@
 
 package org.apache.spark.util.collection
 
-import java.util.Comparator
+import java.util.{Comparator, ArrayList => AList}
 
-import org.apache.spark.storage.DiskBlockObjectWriter
+import org.apache.spark.storage.{DiskBlockObjectWriter, FileSegment}
+
+import scala.collection.mutable.ListBuffer
 
 /**
  * A common interface for size-tracking collections of key-value pairs that
@@ -56,6 +58,13 @@ private[spark] trait WritablePartitionedPairCollection[K, V] {
         writer.write(cur._1._2, cur._2)
         cur = if (it.hasNext) it.next() else null
       }
+
+      def writeNextSplitFileSegments(writer: DiskBlockObjectWriter, segmentLengths: AList[Long], detectCorrput: Boolean, splitThreshold: Long): Unit = {
+        writer.writeSplitFileSegments(cur._1._2, cur._2, segmentLengths, detectCorrput, splitThreshold)
+        cur = if (it.hasNext) it.next() else null
+      }
+
+
 
       def hasNext(): Boolean = cur != null
 
@@ -97,6 +106,8 @@ private[spark] object WritablePartitionedPairCollection {
  */
 private[spark] trait WritablePartitionedIterator {
   def writeNext(writer: DiskBlockObjectWriter): Unit
+
+  def writeNextSplitFileSegments(writer: DiskBlockObjectWriter, segmentLengths: ListBuffer[Long], detectCorrupt: Boolean, splitThreshold: Long): Unit
 
   def hasNext(): Boolean
 

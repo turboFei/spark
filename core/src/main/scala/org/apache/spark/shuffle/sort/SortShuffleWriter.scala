@@ -47,6 +47,28 @@ private[spark] class SortShuffleWriter[K, V, C](
 
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
 
+  private val detectCorrupt = SparkEnv.get.conf.getBoolean("spark.shuffle.detectCorrupt", true)
+  // Whether to compress shuffle output that are stored
+  private val compressShuffle = SparkEnv.get.conf.getBoolean("spark.shuffle.compress", true)
+  // This is a size for a partition block which is
+  // small than the detectCorrupt threshold
+  private val partitionSplitSize = getSplitSize()
+
+  /** get the split size for that the decompressed size is small than the detectCorruptSize */
+  def getSplitSize(): Long = {
+    val maxSizeInFlight = SparkEnv.get.conf.getSizeAsMb("spark.reducer.maxSizeInFlight", "48m") * 1024 * 1024
+    // the log_base to compress size
+    val LOG_BASE = 1.1
+    val threshold = maxSizeInFlight / 3
+    val compressedSize = MapStatus.compressSize(threshold)
+    val deCompressedSize = MapStatus.decompressSize(compressedSize)
+    if (deCompressedSize > threshold) {
+      math.pow(LOG_BASE, (compressedSize & 0xFF - 1).toLong).toLong
+    } else {
+      threshold
+    }
+  }
+
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
     sorter = if (dep.mapSideCombine) {
@@ -69,8 +91,8 @@ private[spark] class SortShuffleWriter[K, V, C](
     val tmp = Utils.tempFileWith(output)
     try {
       val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
-      val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
-      shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
+      val partitionLengths = sorter.writePartitionedFile(blockId, tmp, detectCorrupt && compressShuffle, partitionSplitSize)
+      shuffleBlockResolver.writeSplitIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
       mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
     } finally {
       if (tmp.exists() && !tmp.delete()) {
