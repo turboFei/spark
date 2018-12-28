@@ -18,7 +18,7 @@
 package org.apache.spark.shuffle
 
 import org.apache.spark.network.buffer.ManagedBuffer
-import org.apache.spark.storage.{ShuffleBlockId, ShuffleSplitBlockId}
+import org.apache.spark.storage.ShuffleBlockId
 
 private[spark]
 /**
@@ -34,7 +34,7 @@ trait ShuffleBlockResolver {
    * Retrieve the data for the specified block. If the data for that block is not available,
    * throws an unspecified exception.
    */
-  def getBlockData(blockId: ShuffleSplitBlockId): ManagedBuffer
+  def getBlockData(blockId: ShuffleBlockId): ManagedBuffer
 
   def stop(): Unit
 }

@@ -205,7 +205,7 @@ private[spark] class IndexShuffleBlockResolver(
 
   }
 
-  override def getBlockData(blockId: ShuffleSplitBlockId): ManagedBuffer = {
+  override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
     val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
@@ -251,8 +251,10 @@ private[spark] class IndexShuffleBlockResolver(
 }
 
 private[spark] object IndexShuffleBlockResolver {
-  // No-op reduce ID used in interactions with disk store.
+  // No-op reduce ID and Split ID used in interactions with disk store.
   // The disk store currently expects puts to relate to a (map, reduce) pair, but in the sort
   // shuffle outputs for several reduces are glommed into a single file.
   val NOOP_REDUCE_ID = 0
+  val NOOP_SPLIT_ID = 0
+
 }
