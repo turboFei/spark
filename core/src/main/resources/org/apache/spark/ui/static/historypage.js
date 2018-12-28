@@ -131,8 +131,6 @@ $(document).ready(function() {
           attempt["lastUpdated"] = formatTimeMillis(attempt["lastUpdatedEpoch"]);
           attempt["log"] = uiRoot + "/api/v1/applications/" + id + "/" +
             (attempt.hasOwnProperty("attemptId") ? attempt["attemptId"] + "/" : "") + "logs";
-          attempt["durationMillisec"] = attempt["duration"];
-          attempt["duration"] = formatDuration(attempt["duration"]);
           var id2 = id;
           var attemptId = "";
           if("attemptId" in attempt){
