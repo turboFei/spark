@@ -17,9 +17,7 @@
 
 package org.apache.spark.scheduler
 
-import collection.JavaConverters._
 import java.io.{Externalizable, ObjectInput, ObjectOutput}
-import java.util.{ArrayList => AList}
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}

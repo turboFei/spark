@@ -20,7 +20,6 @@ package org.apache.spark.shuffle
 import java.io._
 import java.nio.channels.Channels
 import java.nio.file.Files
-import java.util.{ArrayList => AList}
 
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
@@ -85,7 +84,7 @@ private[spark] class IndexShuffleBlockResolver(
    * Check whether the given index and data files match each other.
    * If so, return the partition lengths in the data file. Otherwise return null.
    */
-  private def checkSplitIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
+  private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
     // the index file should have `block + 1` longs as offset.
     if (index.length() < (blocks + 1) * 2 * 8L) {
       return null
@@ -127,118 +126,6 @@ private[spark] class IndexShuffleBlockResolver(
       null
     }
   }
-  /**
-    * Check whether the given index and data files match each other.
-    * If so, return the partition lengths in the data file. Otherwise return null.
-    */
-  private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
-    // the index file should have `block + 1` longs as offset.
-    if (index.length() != (blocks + 1) * 8L) {
-      return null
-    }
-    val lengths = new Array[Long](blocks)
-    // Read the lengths of blocks
-    val in = try {
-      new DataInputStream(new NioBufferedFileInputStream(index))
-    } catch {
-      case e: IOException =>
-        return null
-    }
-    try {
-      // Convert the offsets into lengths of each block
-      var offset = in.readLong()
-      if (offset != 0L) {
-        return null
-      }
-      var i = 0
-      while (i < blocks) {
-        val off = in.readLong()
-        lengths(i) = off - offset
-        offset = off
-        i += 1
-      }
-    } catch {
-      case e: IOException =>
-        return null
-    } finally {
-      in.close()
-    }
-
-    // the size of data file should match with index file
-    if (data.length() == lengths.sum) {
-      lengths
-    } else {
-      null
-    }
-  }
-
-  /**
-   * Write an index file with the offsets of each block, plus a final offset at the end for the
-   * end of the output file. This will be used by getBlockData to figure out where each block
-   * begins and ends.
-   *
-   * It will commit the data and index file as an atomic operation, use the existing ones, or
-   * replace them with new ones.
-   *
-   * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
-   */
-  def writeIndexFileAndCommit(
-      shuffleId: Int,
-      mapId: Int,
-      lengths: Array[Long],
-      dataTmp: File): Unit = {
-    val indexFile = getIndexFile(shuffleId, mapId)
-    val indexTmp = Utils.tempFileWith(indexFile)
-    try {
-      val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
-      Utils.tryWithSafeFinally {
-        // We take in lengths of each block, need to convert it to offsets.
-        var offset = 0L
-        out.writeLong(offset)
-        for (length <- lengths) {
-          offset += length
-          out.writeLong(offset)
-        }
-      } {
-        out.close()
-      }
-
-      val dataFile = getDataFile(shuffleId, mapId)
-      // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
-      // the following check and rename are atomic.
-      synchronized {
-        val existingLengths = checkSplitIndexAndDataFile(indexFile, dataFile, lengths.length)
-        if (existingLengths != null) {
-          // Another attempt for the same task has already written our map outputs successfully,
-          // so just use the existing partition lengths and delete our temporary map outputs.
-          System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
-          if (dataTmp != null && dataTmp.exists()) {
-            dataTmp.delete()
-          }
-          indexTmp.delete()
-        } else {
-          // This is the first successful attempt in writing the map outputs for this task,
-          // so override any existing index and data files with the ones we wrote.
-          if (indexFile.exists()) {
-            indexFile.delete()
-          }
-          if (dataFile.exists()) {
-            dataFile.delete()
-          }
-          if (!indexTmp.renameTo(indexFile)) {
-            throw new IOException("fail to rename file " + indexTmp + " to " + indexFile)
-          }
-          if (dataTmp != null && dataTmp.exists() && !dataTmp.renameTo(dataFile)) {
-            throw new IOException("fail to rename file " + dataTmp + " to " + dataFile)
-          }
-        }
-      }
-    } finally {
-      if (indexTmp.exists() && !indexTmp.delete()) {
-        logError(s"Failed to delete temporary index file at ${indexTmp.getAbsolutePath}")
-      }
-    }
-  }
 
   /**
     * Write an index file with the offsets of each block, plus a final offset at the end for the
@@ -250,7 +137,7 @@ private[spark] class IndexShuffleBlockResolver(
     *
     * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
     */
-  def writeSplitIndexFileAndCommit(
+  def writeIndexFileAndCommit(
                                     shuffleId: Int,
                                     mapId: Int,
                                     lengths: Array[ListBuffer[Long]],
@@ -318,7 +205,7 @@ private[spark] class IndexShuffleBlockResolver(
 
   }
 
-  override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
+  override def getBlockData(blockId: ShuffleSplitBlockId): ManagedBuffer = {
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
     val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
