@@ -31,6 +31,7 @@ trait BlockDataManager {
    */
   def getBlockData(blockId: BlockId): ManagedBuffer
 
+  def getSplitBlockData(blockId: BlockId, splitId: Int): ManagedBuffer
   /**
    * Put the block locally, using the given storage level.
    *
