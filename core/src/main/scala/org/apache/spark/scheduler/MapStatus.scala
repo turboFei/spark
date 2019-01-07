@@ -20,7 +20,8 @@ package org.apache.spark.scheduler
 import java.io.{Externalizable, ObjectInput, ObjectOutput}
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+
 
 import org.roaringbitmap.RoaringBitmap
 
@@ -44,6 +45,10 @@ private[spark] sealed trait MapStatus {
    * necessary for correctness, since block fetchers are allowed to skip zero-size blocks.
    */
   def getSizeForBlock(reduceId: Int): Long
+
+  def getSizeForBlock(reduceId: Int, splitId: Int): Long
+
+  def getSplitNumForBlock(reduceId: Int): Long = 1L
 }
 
 
@@ -56,6 +61,15 @@ private[spark] object MapStatus {
       new CompressedMapStatus(loc, uncompressedSizes)
     }
   }
+  def apply(loc: BlockManagerId, uncompressedSizes: Array[ListBuffer[Long]]): MapStatus = {
+    if (uncompressedSizes.length > 2000) {
+      SplitHighlyCompressedMapStatus(loc, uncompressedSizes)
+    } else {
+      new SplitCompressedMapStatus(loc, uncompressedSizes)
+    }
+  }
+
+
 
   private[this] val LOG_BASE = 1.1
 
@@ -111,6 +125,10 @@ private[spark] class CompressedMapStatus(
     MapStatus.decompressSize(compressedSizes(reduceId))
   }
 
+  override def getSizeForBlock(reduceId: Int, splitId: Int): Long = {
+    getSizeForBlock(reduceId)
+  }
+
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)
     out.writeInt(compressedSizes.length)
@@ -162,6 +180,10 @@ private[spark] class HighlyCompressedMapStatus private (
         case None => avgSize
       }
     }
+  }
+
+  override def getSizeForBlock(reduceId: Int, splitId: Int): Long = {
+    getSizeForBlock(reduceId)
   }
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
@@ -235,4 +257,227 @@ private[spark] object HighlyCompressedMapStatus {
     new HighlyCompressedMapStatus(loc, numNonEmptyBlocks, emptyBlocks, avgSize,
       hugeBlockSizesArray.toMap)
   }
+}
+
+
+
+/**
+  * A [[MapStatus]] implementation that tracks the size of each block. Size for each block is
+  * represented using a single byte.
+  *
+  * @param loc location where the task is being executed.
+  * @param compressedSizes size of the blocks, indexed by reduce partition id.
+  */
+private[spark] class SplitCompressedMapStatus(
+    private[this] var loc: BlockManagerId,
+    private[this] var compressedSizes: Array[List[Byte]])
+  extends MapStatus with Externalizable {
+
+  protected def this() = this(null, null.asInstanceOf[Array[List[Byte]]])  // For deserialization only
+
+  def this(loc: BlockManagerId, uncompressedSizes: Array[ListBuffer[Long]]) {
+    this(loc, uncompressedSizes.map(listBuffer => listBuffer.map(MapStatus.compressSize).toList))
+  }
+
+  override def location: BlockManagerId = loc
+
+  override def getSizeForBlock(reduceId: Int): Long = {
+    compressedSizes(reduceId).map(MapStatus.decompressSize).sum
+  }
+
+  override def getSizeForBlock(reduceId: Int, splitId: Int): Long = {
+    MapStatus.decompressSize(compressedSizes(reduceId).apply(splitId))
+  }
+
+  override def getSplitNumForBlock(reduceId: Int): Long = compressedSizes(reduceId).length
+
+  override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
+    loc.writeExternal(out)
+    val len = compressedSizes.length
+    out.writeInt(len)
+    var i = 0
+    while (i < len) {
+      out.writeInt(compressedSizes(i).length)
+      out.write(compressedSizes(i).toArray)
+      i += 1
+    }
+  }
+
+  override def readExternal(in: ObjectInput): Unit = Utils.tryOrIOException {
+    loc = BlockManagerId(in)
+    val len = in.readInt()
+    compressedSizes = new Array[List[Byte]](len)
+    var i = 0
+    while (i < len) {
+      val splitLength = in.readInt()
+      val arr = new Array[Byte](splitLength)
+      in.readFully(arr)
+      compressedSizes(i) = arr.toList
+      i += 1
+    }
+  }
+}
+
+/**
+  * A [[MapStatus]] implementation that stores the accurate size of huge blocks, which are larger
+  * than spark.shuffle.accurateBlockThreshold. It stores the average size of other non-empty blocks,
+  * plus a bitmap for tracking which blocks are empty.
+  *
+  * @param loc location where the task is being executed
+  * @param numNonEmptyBlocks the number of non-empty blocks
+  * @param emptyBlocks a bitmap tracking which blocks are empty
+  * @param avgSize average size of the non-empty and non-huge blocks
+  * @param hugeBlockSizes sizes of huge blocks by their reduceId.
+  */
+private[spark] class SplitHighlyCompressedMapStatus private (
+    private[this] var loc: BlockManagerId,
+    private[this] var numNonEmptyBlocks: Int,
+    private[this] var emptyBlocks: RoaringBitmap,
+    private[this] var avgSize: Long,
+    private var hugeBlockSizes: Map[ReduceSplitId, Byte],
+    private[this] var splitNums: Array[Int])
+  extends MapStatus with Externalizable {
+
+  // loc could be null when the default constructor is called during deserialization
+  require(loc == null || avgSize > 0 || hugeBlockSizes.size > 0 || numNonEmptyBlocks == 0
+    || splitNums.size > 0, "Average size can only be zero for map stages that produced no output")
+
+  protected def this() = this(null, -1, null, -1, null, null)  // For deserialization only
+
+  override def location: BlockManagerId = loc
+
+  override def getSizeForBlock(reduceId: Int): Long = {
+    getSizeForBlock(reduceId, 0)
+  }
+
+  override def getSizeForBlock(reduceId: Int, splitId: Int): Long = {
+    assert(hugeBlockSizes != null)
+    if (emptyBlocks.contains(reduceId)) {
+      0
+    } else {
+      hugeBlockSizes.get(ReduceSplitId(reduceId,splitId)) match {
+        case Some(size) => MapStatus.decompressSize(size)
+        case None => avgSize
+      }
+    }
+  }
+
+  override def getSplitNumForBlock(reduceId: Int): Long = splitNums(reduceId)
+
+
+  override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
+    loc.writeExternal(out)
+    emptyBlocks.writeExternal(out)
+    out.writeLong(avgSize)
+    //write split num arr
+    out.writeInt(splitNums.length)
+    splitNums.foreach { num =>
+      out.writeInt(num)
+    }
+    out.writeInt(hugeBlockSizes.size)
+    hugeBlockSizes.foreach { kv =>
+      out.writeInt(kv._1.reduceId)
+      out.writeInt(kv._1.splitId)
+      out.writeByte(kv._2)
+    }
+  }
+
+  override def readExternal(in: ObjectInput): Unit = Utils.tryOrIOException {
+    loc = BlockManagerId(in)
+    emptyBlocks = new RoaringBitmap()
+    emptyBlocks.readExternal(in)
+    avgSize = in.readLong()
+    val reduceNum = in.readInt()
+    splitNums = new Array[Int](reduceNum)
+    var i = 0
+    while (i < reduceNum) {
+      val num = in.readInt()
+      splitNums(i) = num
+      i += 1
+    }
+    val count = in.readInt()
+    val hugeBlockSizesArray = mutable.ArrayBuffer[Tuple2[ReduceSplitId, Byte]]()
+    (0 until count).foreach { _ =>
+      val reduceId = in.readInt()
+      val splitId = in.readInt()
+      val size = in.readByte()
+      hugeBlockSizesArray += Tuple2(ReduceSplitId(reduceId, splitId), size)
+    }
+    hugeBlockSizes = hugeBlockSizesArray.toMap
+  }
+}
+
+private[spark] object SplitHighlyCompressedMapStatus {
+  def apply(loc: BlockManagerId, uncompressedSizes: Array[ListBuffer[Long]]):
+    SplitHighlyCompressedMapStatus = {
+    // We must keep track of which blocks are empty so that we don't report a zero-sized
+    // block as being non-empty (or vice-versa) when using the average block size.
+    var i = 0
+    var numNonEmptyBlocks: Int = 0
+    var numSmallBlocks: Int = 0
+    var totalSmallBlockSize: Long = 0
+    // From a compression standpoint, it shouldn't matter whether we track empty or non-empty
+    // blocks. From a performance standpoint, we benefit from tracking empty blocks because
+    // we expect that there will be far fewer of them, so we will perform fewer bitmap insertions.
+    val emptyBlocks = new RoaringBitmap()
+    val threshold = Option(SparkEnv.get)
+      .map(_.conf.get(config.SHUFFLE_ACCURATE_BLOCK_THRESHOLD))
+      .getOrElse(config.SHUFFLE_ACCURATE_BLOCK_THRESHOLD.defaultValue.get)
+    val hugeBlockSizesArray = ArrayBuffer[Tuple2[ReduceSplitId, Byte]]()
+    val reduceNum = uncompressedSizes.length
+    val splitNumArray = new Array[Int](reduceNum)
+    while (i < reduceNum) {
+      var j = 0
+      val splitSizes = uncompressedSizes(i)
+      val splitNum = splitSizes.length
+      splitNumArray(i) = splitNum
+      while (j < splitNum) {
+        val size = splitSizes.apply(j)
+        if (size > 0) {
+          numNonEmptyBlocks += 1
+          // Huge blocks are not included in the calculation for average size, thus size for smaller
+          // blocks is more accurate.
+          if (size < threshold) {
+            totalSmallBlockSize += size
+            numSmallBlocks += 1
+          } else {
+            hugeBlockSizesArray += Tuple2(new ReduceSplitId(i, j) , MapStatus.compressSize(size))
+          }
+        } else {
+          emptyBlocks.add(i)
+        }
+        j += 1
+      }
+      i += 1
+    }
+
+
+    val avgSize = if (numSmallBlocks > 0) {
+      totalSmallBlockSize / numSmallBlocks
+    } else {
+      0
+    }
+    emptyBlocks.trim()
+    emptyBlocks.runOptimize()
+    new SplitHighlyCompressedMapStatus(loc, numNonEmptyBlocks, emptyBlocks, avgSize,
+      hugeBlockSizesArray.toMap, splitNumArray)
+  }
+}
+
+private[spark] case class ReduceSplitId(reduceId:Int, splitId: Int) {
+  override def hashCode(): Int = (reduceId, splitId).##
+
+  def canEqual(other: Any): Boolean = other.isInstanceOf[ReduceSplitId]
+
+  override def equals(other: Any): Boolean = {
+    other match {
+      case that: ReduceSplitId =>
+        (that canEqual this) && reduceId == that.reduceId && splitId == that.splitId
+      case _ =>
+        false
+    }
+  }
+
+  override def toString: String = reduceId + "_" + splitId
+
 }
