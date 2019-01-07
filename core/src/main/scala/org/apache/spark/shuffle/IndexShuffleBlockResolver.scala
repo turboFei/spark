@@ -17,6 +17,8 @@
 
 package org.apache.spark.shuffle
 
+import scala.collection.mutable.ListBuffer
+
 import java.io._
 import java.nio.channels.Channels
 import java.nio.file.Files
@@ -124,6 +126,144 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   /**
+    * Check whether the given index and data files match each other.
+    * If so, return the partition lengths in the data file. Otherwise return null.
+    */
+  private def checkSplitIndexAndDataFile(index: File, data: File, blocks: Int): Array[ListBuffer[Long]] = {
+    // the index file should have `block + 1` longs as offset.
+    if (index.length() < (blocks + 1) * 2 * 8L) {
+      return null
+    }
+    val lengths = new Array[ListBuffer[Long]](blocks)
+    val splitLengths = new Array[Long](blocks)
+    // Read the lengths of blocks
+    val in = try {
+      new DataInputStream(new NioBufferedFileInputStream(index))
+    } catch {
+      case e: IOException =>
+        return null
+    }
+    try {
+      // Convert the offsets into lengths of each block
+      var splitOffset = in.readLong()
+      var i = 0
+      while (i < blocks) {
+        val off = in.readLong()
+        splitLengths(i) = off - splitOffset
+        splitOffset = off
+        i += 1
+      }
+      var offset = in.readLong()
+      if (offset != 0L) {
+        return null
+      }
+      i = 0
+      while (i < blocks) {
+        var j = 0
+        val splitLengthList = new ListBuffer[Long]
+        while (j < splitLengths(i)) {
+          val off = in.readLong()
+          splitLengthList += off - offset
+          offset = off
+          j += 1
+        }
+        lengths(i) = splitLengthList
+        i += 1
+      }
+    } catch {
+      case e: IOException =>
+        return null
+    } finally {
+      in.close()
+    }
+
+    // the size of data file should match with index file
+    if (data.length() == lengths.map(_.sum).sum) {
+      lengths
+    } else {
+      null
+    }
+  }
+
+  /**
+    * Write an index file with the offsets of each block, plus a final offset at the end for the
+    * end of the output file. This will be used by getBlockData to figure out where each block
+    * begins and ends.
+    *
+    * It will commit the data and index file as an atomic operation, use the existing ones, or
+    * replace them with new ones.
+    *
+    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
+    */
+  def writeSplitIndexFileAndCommit(
+      shuffleId: Int,
+      mapId: Int,
+      lengths: Array[ListBuffer[Long]],
+      dataTmp: File): Unit = {
+    val indexFile = getIndexFile(shuffleId, mapId)
+    val indexTmp = Utils.tempFileWith(indexFile)
+    try {
+      val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
+      Utils.tryWithSafeFinally {
+        //  each reduceId point to split lengths offset, first level index
+        var lengthsOffset = lengths.length + 1
+        var offset = 0L
+        for (splitLengths <- lengths) {
+          out.writeLong(lengthsOffset)
+          lengthsOffset += splitLengths.length
+        }
+        out.writeLong(lengthsOffset)
+        // then each split length, secondary level index
+        for (splitLengths <- lengths) {
+          for (splitLength <- splitLengths) {
+            out.writeLong(offset)
+            offset += splitLength
+          }
+        }
+        out.writeLong(offset)
+      } {
+        out.close()
+      }
+
+      val dataFile = getDataFile(shuffleId, mapId)
+      // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
+      // the following check and rename are atomic.
+      synchronized {
+        val existingLengths = checkSplitIndexAndDataFile(indexFile, dataFile, lengths.length)
+        if (existingLengths != null) {
+          // Another attempt for the same task has already written our map outputs successfully,
+          // so just use the existing partition lengths and delete our temporary map outputs.
+          System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
+          if (dataTmp != null && dataTmp.exists()) {
+            dataTmp.delete()
+          }
+          indexTmp.delete()
+        } else {
+          // This is the first successful attempt in writing the map outputs for this task,
+          // so override any existing index and data files with the ones we wrote.
+          if (indexFile.exists()) {
+            indexFile.delete()
+          }
+          if (dataFile.exists()) {
+            dataFile.delete()
+          }
+          if (!indexTmp.renameTo(indexFile)) {
+            throw new IOException("fail to rename file " + indexTmp + " to " + indexFile)
+          }
+          if (dataTmp != null && dataTmp.exists() && !dataTmp.renameTo(dataFile)) {
+            throw new IOException("fail to rename file " + dataTmp + " to " + dataFile)
+          }
+        }
+      }
+    } finally {
+      if (indexTmp.exists() && !indexTmp.delete()) {
+        logError(s"Failed to delete temporary index file at ${indexTmp.getAbsolutePath}")
+      }
+    }
+
+  }
+
+  /**
    * Write an index file with the offsets of each block, plus a final offset at the end for the
    * end of the output file. This will be used by getBlockData to figure out where each block
    * begins and ends.
@@ -219,6 +359,47 @@ private[spark] class IndexShuffleBlockResolver(
         getDataFile(blockId.shuffleId, blockId.mapId),
         offset,
         nextOffset - offset)
+    } finally {
+      in.close()
+    }
+  }
+
+  override def getBlockSplitData(blockId: ShuffleBlockId, splitId: Int): ManagedBuffer = {
+    // The block is actually going to be a range of a single map output file for this map, so
+    // find out the consolidated file, then the offset within that from our index
+    val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
+
+    // SPARK-22982: if this FileInputStream's position is seeked forward by another piece of code
+    // which is incorrectly using our file descriptor then this code will fetch the wrong offsets
+    // (which may cause a reducer to be sent a different reducer's data). The explicit position
+    // checks added here were a useful debugging aid during SPARK-22982 and may help prevent this
+    // class of issue from re-occurring in the future which is why they are left here even though
+    // SPARK-22982 is fixed.
+    val channel = Files.newByteChannel(indexFile.toPath)
+    channel.position(blockId.reduceId * 8L)
+    val in = new DataInputStream(Channels.newInputStream(channel))
+    try {
+      val offset = in.readLong()
+      val nextOffset = in.readLong()
+      val actualPosition = channel.position()
+      val expectedPosition = blockId.reduceId * 8L + 16
+      if (actualPosition != expectedPosition) {
+        throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
+          s"expected $expectedPosition but actual position was $actualPosition.")
+      }
+      val splitNum = nextOffset - offset
+      if (splitId >= splitNum || splitId < 0) {
+        throw new Exception(s"NESPARK-160: Incorrect splitId: splitId is $splitId" +
+        s" and should between 0 and $splitNum")
+      }
+      channel.position((offset + splitId) * 8L)
+      val splitOffset = in.readLong()
+      val nextSplitOffset = in.readLong()
+      new FileSegmentManagedBuffer(
+        transportConf,
+        getDataFile(blockId.shuffleId, blockId.mapId),
+        splitOffset,
+        nextSplitOffset - splitOffset)
     } finally {
       in.close()
     }

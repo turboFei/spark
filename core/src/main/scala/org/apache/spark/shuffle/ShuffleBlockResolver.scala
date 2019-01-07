@@ -36,5 +36,7 @@ trait ShuffleBlockResolver {
    */
   def getBlockData(blockId: ShuffleBlockId): ManagedBuffer
 
+  def getBlockSplitData(blockId: ShuffleBlockId, splitId: Int): ManagedBuffer
+
   def stop(): Unit
 }
