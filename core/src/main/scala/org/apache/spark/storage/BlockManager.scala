@@ -868,6 +868,23 @@ private[spark] class BlockManager(
   }
 
   /**
+    * A short circuited method to get a block writer that can write data directly to disk.
+    * The Block will be appended to the File specified by filename. Callers should handle error
+    * cases.
+    */
+  def getSplitDiskWriter(
+  blockId: BlockId,
+  file: File,
+  serializerInstance: SerializerInstance,
+  bufferSize: Int,
+  writeMetrics: ShuffleWriteMetrics,
+  splitThreshold: Long): SplitDiskBlockObjectWriter = {
+    val syncWrites = conf.getBoolean("spark.shuffle.sync", false)
+    new SplitDiskBlockObjectWriter(file, serializerManager, serializerInstance, bufferSize,
+      syncWrites, writeMetrics, blockId, splitThreshold)
+  }
+
+  /**
    * Put a new block of serialized bytes to the block manager.
    *
    * '''Important!''' Callers must not mutate or release the data buffer underlying `bytes`. Doing

@@ -21,7 +21,7 @@ import java.io._
 import java.util.Comparator
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
+import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 import com.google.common.io.ByteStreams
 
@@ -697,6 +697,7 @@ private[spark] class ExternalSorter[K, V, C](
         val partitionId = it.nextPartition()
         while (it.hasNext && it.nextPartition() == partitionId) {
           it.writeNext(writer)
+
         }
         val segment = writer.commitAndGet()
         lengths(partitionId) = segment.length
@@ -710,6 +711,67 @@ private[spark] class ExternalSorter[K, V, C](
           }
           val segment = writer.commitAndGet()
           lengths(id) = segment.length
+        }
+      }
+    }
+
+    writer.close()
+    context.taskMetrics().incMemoryBytesSpilled(memoryBytesSpilled)
+    context.taskMetrics().incDiskBytesSpilled(diskBytesSpilled)
+    context.taskMetrics().incPeakExecutionMemory(peakMemoryUsedBytes)
+
+    lengths
+  }
+
+  /**
+    * Write all the data added into this ExternalSorter into a file in the disk store. This is
+    * called by the SortShuffleMapSplitWriter.
+    *
+    * @param blockId block ID to write to. The index file will be blockId.name + ".index".
+    * @return array of lengths listBuffer, in bytes, of each partition of the file
+    * (used by map output tracker)
+    */
+  def writeSplitPartitionedFile(
+      blockId: BlockId,
+      outputFile: File,
+      splitThreshold: Long): Array[ListBuffer[Long]] = {
+
+    // Track location of each range in the output file
+    val lengths = new Array[ListBuffer[Long]](numPartitions)
+    val writer = blockManager.getSplitDiskWriter(blockId, outputFile, serInstance, fileBufferSize,
+      context.taskMetrics().shuffleWriteMetrics, splitThreshold)
+
+    if (spills.isEmpty) {
+      // Case where we only have in-memory data
+      val collection = if (aggregator.isDefined) map else buffer
+      val it = collection.destructiveSortedWritableSplitPartitionedIterator(comparator)
+      while (it.hasNext) {
+        val partitionId = it.nextPartition()
+        writer.setSplitLengths()
+        while (it.hasNext && it.nextPartition() == partitionId) {
+          it.writeNext(writer)
+        }
+        val splitLengths = writer.getSplitLengths()
+        val segment = writer.commitAndGet()
+        if (splitLengths.size == 0 || segment.length > 0) {
+          splitLengths += segment.length
+        }
+        lengths(partitionId) = splitLengths
+      }
+    } else {
+      // We must perform merge-sort; get an iterator by partition and write everything directly.
+      for ((id, elements) <- this.partitionedIterator) {
+        writer.setSplitLengths()
+        if (elements.hasNext) {
+          for (elem <- elements) {
+            writer.write(elem._1, elem._2)
+          }
+          val splitLengths = writer.getSplitLengths()
+          val segment = writer.commitAndGet()
+          if(splitLengths.size == 0 || segment.length > 0) {
+            splitLengths += segment.length
+          }
+          lengths(id) = splitLengths
         }
       }
     }

@@ -154,7 +154,7 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           context,
           env.conf)
       case mapOutSplitHandle: MapOutSplitShuffleHandle[K @unchecked, V @unchecked] =>
-        new SortShuffleMapSplitWriter(shuffleBlockResolver, mapOutSplitHandle, mapId, context)
+        new SortShuffleMapSplitWriter(shuffleBlockResolver, mapOutSplitHandle, mapId, context, env.conf)
       case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>
         new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)
     }

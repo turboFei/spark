@@ -19,7 +19,7 @@ package org.apache.spark.util.collection
 
 import java.util.Comparator
 
-import org.apache.spark.storage.DiskBlockObjectWriter
+import org.apache.spark.storage.{DiskBlockObjectWriter, SplitDiskBlockObjectWriter}
 
 /**
  * A common interface for size-tracking collections of key-value pairs that
@@ -53,6 +53,28 @@ private[spark] trait WritablePartitionedPairCollection[K, V] {
       private[this] var cur = if (it.hasNext) it.next() else null
 
       def writeNext(writer: DiskBlockObjectWriter): Unit = {
+        writer.write(cur._1._2, cur._2)
+        cur = if (it.hasNext) it.next() else null
+      }
+
+      def hasNext(): Boolean = cur != null
+
+      def nextPartition(): Int = cur._1._1
+    }
+  }
+
+  /**
+    * Iterate through the data and write out the elements instead of returning them. Records are
+    * returned in order of their partition ID and then the given comparator.
+    * This may destroy the underlying collection.
+    */
+  def destructiveSortedWritableSplitPartitionedIterator(keyComparator: Option[Comparator[K]])
+  : WritableSplitPartitionedIterator = {
+    val it = partitionedDestructiveSortedIterator(keyComparator)
+    new WritableSplitPartitionedIterator {
+      private[this] var cur = if (it.hasNext) it.next() else null
+
+      def writeNext(writer: SplitDiskBlockObjectWriter): Unit = {
         writer.write(cur._1._2, cur._2)
         cur = if (it.hasNext) it.next() else null
       }
@@ -97,6 +119,18 @@ private[spark] object WritablePartitionedPairCollection {
  */
 private[spark] trait WritablePartitionedIterator {
   def writeNext(writer: DiskBlockObjectWriter): Unit
+
+  def hasNext(): Boolean
+
+  def nextPartition(): Int
+}
+
+/**
+  * Iterator that writes elements to a DiskBlockObjectWriter instead of returning them. Each element
+  * has an associated partition.
+  */
+private[spark] trait WritableSplitPartitionedIterator {
+  def writeNext(writer: SplitDiskBlockObjectWriter): Unit
 
   def hasNext(): Boolean
 
