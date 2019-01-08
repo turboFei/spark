@@ -63,7 +63,7 @@ final class ShuffleSplitBlockFetcherIterator(
     context: TaskContext,
     shuffleClient: ShuffleClient,
     blockManager: BlockManager,
-    blocksByAddress: Seq[(BlockManagerId, Seq[(BlockId, Int, Long)])],
+    blocksByAddress: Seq[(BlockManagerId, Seq[(BlockId, Long)])],
     streamWrapper: (BlockId, InputStream) => InputStream,
     maxBytesInFlight: Long,
     maxReqsInFlight: Int,
@@ -91,10 +91,10 @@ final class ShuffleSplitBlockFetcherIterator(
   private[this] val startTime = System.currentTimeMillis
 
   /** Local blocks to fetch, excluding zero-sized blocks. */
-  private[this] val localBlocks = scala.collection.mutable.LinkedHashSet[(BlockId, Int)]()
+  private[this] val localBlocks = scala.collection.mutable.LinkedHashSet[BlockId]()
 
   /** Remote blocks to fetch, excluding zero-sized blocks. */
-  private[this] val remoteBlocks = new HashSet[(BlockId, Int)]()
+  private[this] val remoteBlocks = new HashSet[BlockId]()
 
   /**
     * A queue to hold our results. This turns the asynchronous model provided by
@@ -133,7 +133,7 @@ final class ShuffleSplitBlockFetcherIterator(
     * The blocks that can't be decompressed successfully, it is used to guarantee that we retry
     * at most once for those corrupted blocks.
     */
-  private[this] val corruptedBlocks = mutable.HashSet[(BlockId, Int)]()
+  private[this] val corruptedBlocks = mutable.HashSet[BlockId]()
 
   private[this] val shuffleMetrics = context.taskMetrics().createTempShuffleReadMetrics()
 
@@ -193,7 +193,7 @@ final class ShuffleSplitBlockFetcherIterator(
     while (iter.hasNext) {
       val result = iter.next()
       result match {
-        case SuccessSplitFetchResult(_, _, address, _, buf, _) =>
+        case SuccessSplitFetchResult(_, address, _, buf, _) =>
           if (address != blockManager.blockManagerId) {
             shuffleMetrics.incRemoteBytesRead(buf.size)
             if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
@@ -219,10 +219,9 @@ final class ShuffleSplitBlockFetcherIterator(
     reqsInFlight += 1
 
     // so we can look up the size of each blockID
-    val sizeMap = req.blocks.map { case (blockId, splitId, size) => (blockId.toString + "_"
-      + splitId, size) }.toMap
+    val sizeMap = req.blocks.map { case (blockId, size) => (blockId.toString, size) }.toMap
     val remainingBlocks = new HashSet[String]() ++= sizeMap.keys
-    val blockIds = req.blocks.map( block => block._1.toString + "_" + block._2)
+    val blockIds = req.blocks.map(_._1.toString)
     val address = req.address
 
     val blockFetchingListener = new SplitBlockFetchingListener {
@@ -235,7 +234,7 @@ final class ShuffleSplitBlockFetcherIterator(
             // This needs to be released after use.
             buf.retain()
             remainingBlocks -= blockId
-            results.put(new SuccessSplitFetchResult(BlockId(blockId), splitId, address, sizeMap(blockId),
+            results.put(new SuccessSplitFetchResult(BlockId(blockId), address, sizeMap(blockId),
               buf, remainingBlocks.isEmpty))
             logDebug("remainingBlocks: " + remainingBlocks)
           }
@@ -279,18 +278,18 @@ final class ShuffleSplitBlockFetcherIterator(
       totalBlocks += blockInfos.size
       if (address.executorId == blockManager.blockManagerId.executorId) {
         // Filter out zero-sized blocks
-        localBlocks ++= blockInfos.filter(_._3 != 0).map(info =>(info._1, info._2))
+        localBlocks ++= blockInfos.filter(_._2 != 0).map(_._1)
         numBlocksToFetch += localBlocks.size
       } else {
         val iterator = blockInfos.iterator
         var curRequestSize = 0L
-        var curBlocks = new ArrayBuffer[(BlockId, Int, Long)]
+        var curBlocks = new ArrayBuffer[(BlockId, Long)]
         while (iterator.hasNext) {
-          val (blockId, splitId, size) = iterator.next()
+          val (blockId, size) = iterator.next()
           // Skip empty blocks
           if (size > 0) {
-            curBlocks += ((blockId, splitId, size))
-            remoteBlocks += ((blockId, splitId))
+            curBlocks += ((blockId, size))
+            remoteBlocks += blockId
             numBlocksToFetch += 1
             curRequestSize += size
           } else if (size < 0) {
@@ -302,7 +301,7 @@ final class ShuffleSplitBlockFetcherIterator(
             remoteRequests += new SplitFetchRequest(address, curBlocks)
             logDebug(s"Creating fetch request of $curRequestSize at $address "
               + s"with ${curBlocks.size} blocks")
-            curBlocks = new ArrayBuffer[(BlockId, Int, Long)]
+            curBlocks = new ArrayBuffer[(BlockId, Long)]
             curRequestSize = 0
           }
         }
@@ -325,21 +324,19 @@ final class ShuffleSplitBlockFetcherIterator(
     logDebug(s"Start fetching local blocks: ${localBlocks.mkString(", ")}")
     val iter = localBlocks.iterator
     while (iter.hasNext) {
-      val blockInfo = iter.next()
-      val blockId = blockInfo._1
-      val splitId = blockInfo._2
+      val blockId = iter.next()
       try {
-        val buf = blockManager.getSplitBlockData(blockId, splitId)
+        val buf = blockManager.getSplitBlockData(blockId)
         shuffleMetrics.incLocalBlocksFetched(1)
         shuffleMetrics.incLocalBytesRead(buf.size)
         buf.retain()
-        results.put(new SuccessSplitFetchResult(blockId, splitId, blockManager.blockManagerId,
+        results.put(new SuccessSplitFetchResult(blockId, blockManager.blockManagerId,
           buf.size(), buf, false))
       } catch {
         case e: Exception =>
           // If we see an exception, stop immediately.
           logError(s"Error occurred while fetching local blocks", e)
-          results.put(new FailureFetchResult(blockId, splitId, blockManager.blockManagerId, e))
+          results.put(new FailureFetchResult(blockId, blockManager.blockManagerId, e))
           return
       }
     }
@@ -398,7 +395,7 @@ final class ShuffleSplitBlockFetcherIterator(
       shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
       result match {
-        case r @ SuccessSplitFetchResult(blockId, splitId, address, size, buf, isNetworkReqDone) =>
+        case r @ SuccessSplitFetchResult(blockId, address, size, buf, isNetworkReqDone) =>
           if (address != blockManager.blockManagerId) {
             numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
             shuffleMetrics.incRemoteBytesRead(buf.size)
@@ -407,7 +404,7 @@ final class ShuffleSplitBlockFetcherIterator(
             }
             shuffleMetrics.incRemoteBlocksFetched(1)
           }
-          if (!localBlocks.contains((blockId, splitId))) {
+          if (!localBlocks.contains((blockId))) {
             bytesInFlight -= size
           }
           if (isNetworkReqDone) {
@@ -423,7 +420,7 @@ final class ShuffleSplitBlockFetcherIterator(
               assert(buf.isInstanceOf[FileSegmentManagedBuffer])
               logError("Failed to create input stream from local block", e)
               buf.release()
-              throwFetchFailedException(blockId, splitId, address, e)
+              throwFetchFailedException(blockId, address, e)
           }
 
           input = streamWrapper(blockId, in)
@@ -443,12 +440,12 @@ final class ShuffleSplitBlockFetcherIterator(
               case e: IOException =>
                 buf.release()
                 if (buf.isInstanceOf[FileSegmentManagedBuffer]
-                  || corruptedBlocks.contains((blockId, splitId))) {
-                  throwFetchFailedException(blockId, splitId, address, e)
+                  || corruptedBlocks.contains(blockId)) {
+                  throwFetchFailedException(blockId, address, e)
                 } else {
                   logWarning(s"got an corrupted block $blockId from $address, fetch again", e)
-                  corruptedBlocks += ((blockId, splitId))
-                  fetchRequests += SplitFetchRequest(address, Array((blockId, splitId, size)))
+                  corruptedBlocks += (blockId)
+                  fetchRequests += SplitFetchRequest(address, Array((blockId, size)))
                   result = null
                 }
             } finally {
@@ -458,8 +455,8 @@ final class ShuffleSplitBlockFetcherIterator(
             }
           }
 
-        case FailureFetchResult(blockId, splitId, address, e) =>
-          throwFetchFailedException(blockId, splitId, address, e)
+        case FailureFetchResult(blockId, address, e) =>
+          throwFetchFailedException(blockId, address, e)
       }
 
       // Send fetch requests up to maxBytesInFlight
@@ -525,7 +522,7 @@ final class ShuffleSplitBlockFetcherIterator(
     }
   }
 
-  private def throwFetchFailedException(blockId: BlockId, splitId: Int, address: BlockManagerId, e: Throwable) = {
+  private def throwFetchFailedException(blockId: BlockId, address: BlockManagerId, e: Throwable) = {
     blockId match {
       case ShuffleBlockId(shufId, mapId, reduceId) =>
         throw new FetchFailedException(address, shufId.toInt, mapId.toInt, reduceId, e)
@@ -579,8 +576,8 @@ object ShuffleSplitBlockFetcherIterator {
     * @param blocks Sequence of tuple, where the first element is the block id,
     *               and the second element is the estimated size, used to calculate bytesInFlight.
     */
-  case class SplitFetchRequest(address: BlockManagerId, blocks: Seq[(BlockId, Int, Long)]) {
-    val size = blocks.map(_._3).sum
+  case class SplitFetchRequest(address: BlockManagerId, blocks: Seq[(BlockId, Long)]) {
+    val size = blocks.map(_._2).sum
   }
 
   /**
@@ -588,7 +585,6 @@ object ShuffleSplitBlockFetcherIterator {
     */
   private[storage] sealed trait SplitFetchResult {
     val blockId: BlockId
-    val splitId: Int
     val address: BlockManagerId
   }
 
@@ -603,7 +599,6 @@ object ShuffleSplitBlockFetcherIterator {
     */
   private[storage] case class SuccessSplitFetchResult(
       blockId: BlockId,
-      splitId: Int,
       address: BlockManagerId,
       size: Long,
       buf: ManagedBuffer,
@@ -620,7 +615,6 @@ object ShuffleSplitBlockFetcherIterator {
     */
   private[storage] case class FailureFetchResult(
       blockId: BlockId,
-      splitId: Int,
       address: BlockManagerId,
       e: Throwable)
     extends SplitFetchResult

@@ -373,7 +373,10 @@ private[spark] class BlockManager(
    * cannot be read successfully.
    */
   override def getBlockData(blockId: BlockId): ManagedBuffer = {
-    if (blockId.isShuffle) {
+    if (blockId.isShuffleSplit) {
+      shuffleManager.shuffleBlockResolver.getBlockSplitData(
+        blockId.asInstanceOf[ShuffleSplitBlockId])
+    } else if (blockId.isShuffle) {
       shuffleManager.shuffleBlockResolver.getBlockData(blockId.asInstanceOf[ShuffleBlockId])
     } else {
       getLocalBytes(blockId) match {
@@ -389,24 +392,6 @@ private[spark] class BlockManager(
     }
   }
 
-  override def getSplitBlockData(blockId: BlockId, splitId: Int): ManagedBuffer = {
-    if (blockId.isShuffle) {
-      shuffleManager.shuffleBlockResolver.getBlockSplitData(
-        blockId.asInstanceOf[ShuffleBlockId], splitId)
-    } else {
-      getLocalBytes(blockId) match {
-        case Some(blockData) =>
-          new BlockManagerManagedBuffer(blockInfoManager, blockId, blockData, true)
-        case None =>
-          // If this block manager receives a request for a block that it doesn't have then it's
-          // likely that the master has outdated block statuses for this block. Therefore, we send
-          // an RPC so that this block is marked as being unavailable from this block manager.
-          reportBlockStatus(blockId, BlockStatus.empty)
-          throw new BlockNotFoundException(blockId.toString)
-      }
-    }
-
-  }
 
   /**
    * Put the block locally, using the given storage level.

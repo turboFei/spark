@@ -32,7 +32,8 @@ import org.apache.spark.network.buffer.ManagedBuffer
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClientBootstrap, TransportClientFactory}
 import org.apache.spark.network.crypto.{AuthClientBootstrap, AuthServerBootstrap}
 import org.apache.spark.network.server._
-import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, OneForOneBlockFetcher, RetryingBlockFetcher}
+import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, OneForOneBlockFetcher, OneForOneSplitBlockFetcher, RetryingBlockFetcher,
+  RetryingSplitBlockFetcher, SplitBlockFetchingListener}
 import org.apache.spark.network.shuffle.protocol.UploadBlock
 import org.apache.spark.network.util.JavaUtils
 import org.apache.spark.serializer.JavaSerializer
@@ -128,6 +129,39 @@ private[spark] class NettyBlockTransferService(
       case e: Exception =>
         logError("Exception while beginning fetchBlocks", e)
         blockIds.foreach(listener.onBlockFetchFailure(_, e))
+    }
+  }
+
+  override def fetchSplitBlocks(
+      host: String,
+      port: Int,
+      execId: String,
+      blockIds: Array[String],
+      listener: SplitBlockFetchingListener,
+      tempFileManager: DownloadFileManager): Unit = {
+    logTrace(s"Fetch blocks from $host:$port (executor id $execId)")
+    try {
+      val blockFetchStarter = new RetryingSplitBlockFetcher.SplitBlockFetchStarter {
+        override def createAndStart(blockIds: Array[String], listener: SplitBlockFetchingListener) {
+          val client = clientFactory.createClient(host, port)
+          new OneForOneSplitBlockFetcher(client, appId, execId, blockIds, listener,
+            transportConf, tempFileManager).start()
+        }
+      }
+
+      val maxRetries = transportConf.maxIORetries()
+      if (maxRetries > 0) {
+        // Note this Fetcher will correctly handle maxRetries == 0; we avoid it just in case there's
+        // a bug in this code. We should remove the if statement once we're sure of the stability.
+        new RetryingSplitBlockFetcher(transportConf, blockFetchStarter, blockIds, listener).start()
+      } else {
+        blockFetchStarter.createAndStart(blockIds, listener)
+      }
+    } catch {
+      case e: Exception =>
+        logError("Exception while beginning fetchBlocks", e)
+        //TODO: splitId set 0
+        blockIds.foreach(listener.onBlockFetchFailure(_,0, e))
     }
   }
 

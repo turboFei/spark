@@ -27,10 +27,10 @@ public interface SplitBlockFetchingListener extends EventListener {
      * automatically. If the data will be passed to another thread, the receiver should retain()
      * and release() the buffer on their own, or copy the data to a new buffer.
      */
-    void onBlockFetchSuccess(String blockId, int splitId, ManagedBuffer data);
+    void onBlockFetchSuccess(String blockId, ManagedBuffer data);
 
     /**
      * Called at least once per block upon failures.
      */
-    void onBlockFetchFailure(String blockId, int splitId, Throwable exception);
+    void onBlockFetchFailure(String blockId, Throwable exception);
 }

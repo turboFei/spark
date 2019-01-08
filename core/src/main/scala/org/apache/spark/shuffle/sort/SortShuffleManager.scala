@@ -118,13 +118,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       startPartition: Int,
       endPartition: Int,
       context: TaskContext): ShuffleReader[K, C] = {
-    if (SortShuffleManager.canUseMapOutSplitShuffle(conf)) {
-      new BlockStoreSplitShuffleReader(
-        handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startPartition, endPartition, context)
-    } else {
       new BlockStoreShuffleReader(
         handle.asInstanceOf[BaseShuffleHandle[K, _, C]], startPartition, endPartition, context)
-    }
   }
 
   /** Get a writer for a given partition. Called on executors by map tasks. */
@@ -154,6 +149,7 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           context,
           env.conf)
       case mapOutSplitHandle: MapOutSplitShuffleHandle[K @unchecked, V @unchecked] =>
+        SortShuffleManager.setMapOutSplitShuffle
         new SortShuffleMapSplitWriter(shuffleBlockResolver, mapOutSplitHandle, mapId, context, env.conf)
       case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>
         new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)
@@ -186,6 +182,14 @@ private[spark] object SortShuffleManager extends Logging {
    * */
   val MAX_SHUFFLE_OUTPUT_PARTITIONS_FOR_SERIALIZED_MODE =
     PackedRecordPointer.MAXIMUM_PARTITION_ID + 1
+
+  private[this] var useMapOutSplitShuffle: Boolean = false
+
+  def setMapOutSplitShuffle: Unit = {
+    useMapOutSplitShuffle = true
+  }
+
+  def isUseMapOutSplitShuffle: Boolean = useMapOutSplitShuffle
 
   /**
    * Helper method for determining whether a shuffle should use an optimized serialized shuffle
