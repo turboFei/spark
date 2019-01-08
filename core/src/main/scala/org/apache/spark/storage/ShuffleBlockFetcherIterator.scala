@@ -526,7 +526,7 @@ final class ShuffleBlockFetcherIterator(
     blockId match {
       case ShuffleBlockId(shufId, mapId, reduceId) =>
         throw new FetchFailedException(address, shufId.toInt, mapId.toInt, reduceId, e)
-      case ShuffleSplitBlockId(shuffleBlockId, splId) =>
+      case ShuffleSplitBlockId(shuffleBlockId, _) =>
         throw new FetchFailedException(address, shuffleBlockId.shuffleId, shuffleBlockId.mapId,
           shuffleBlockId.reduceId, e)
       case _ =>
