@@ -22,7 +22,6 @@ import java.io.{Externalizable, ObjectInput, ObjectOutput}
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
-
 import org.roaringbitmap.RoaringBitmap
 
 import org.apache.spark.SparkEnv

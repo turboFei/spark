@@ -697,7 +697,6 @@ private[spark] class ExternalSorter[K, V, C](
         val partitionId = it.nextPartition()
         while (it.hasNext && it.nextPartition() == partitionId) {
           it.writeNext(writer)
-
         }
         val segment = writer.commitAndGet()
         lengths(partitionId) = segment.length

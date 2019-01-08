@@ -26,12 +26,14 @@ import scala.concurrent.Future
 import scala.concurrent.duration._
 import scala.language.{implicitConversions, postfixOps}
 import scala.reflect.ClassTag
+
 import org.apache.commons.lang3.RandomUtils
 import org.mockito.{Matchers => mc}
 import org.mockito.Mockito.{mock, times, verify, when}
 import org.scalatest._
 import org.scalatest.concurrent.{Signaler, ThreadSignaler, TimeLimits}
 import org.scalatest.concurrent.Eventually._
+
 import org.apache.spark._
 import org.apache.spark.broadcast.BroadcastManager
 import org.apache.spark.executor.DataReadMethod
@@ -42,7 +44,7 @@ import org.apache.spark.network.buffer.{ManagedBuffer, NioManagedBuffer}
 import org.apache.spark.network.client.{RpcResponseCallback, TransportClient}
 import org.apache.spark.network.netty.{NettyBlockTransferService, SparkTransportConf}
 import org.apache.spark.network.server.{NoOpRpcHandler, TransportServer, TransportServerBootstrap}
-import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, SplitBlockFetchingListener}
+import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager}
 import org.apache.spark.network.shuffle.protocol.{BlockTransferMessage, RegisterExecutor}
 import org.apache.spark.rpc.RpcEnv
 import org.apache.spark.scheduler.LiveListenerBus
@@ -1415,15 +1417,6 @@ class BlockManagerSuite extends SparkFunSuite with Matchers with BeforeAndAfterE
       listener.onBlockFetchSuccess("mockBlockId", new NioManagedBuffer(ByteBuffer.allocate(1)))
     }
 
-    override def fetchSplitBlocks(
-        host: String,
-        port: Int, execId: String,
-        blockIds: Array[String],
-        listener: SplitBlockFetchingListener,
-        downloadFileManager: DownloadFileManager): Unit = {
-      listener.onBlockFetchSuccess("mockBlockId", 0, new NioManagedBuffer(ByteBuffer.allocate(1)))
-
-    }
     override def close(): Unit = {}
 
     override def hostName: String = { "MockBlockTransferServiceHost" }

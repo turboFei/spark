@@ -23,9 +23,10 @@ import java.nio.ByteBuffer
 import scala.concurrent.{Future, Promise}
 import scala.concurrent.duration.Duration
 import scala.reflect.ClassTag
+
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer, NioManagedBuffer}
-import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, ShuffleClient, SplitBlockFetchingListener}
+import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, ShuffleClient}
 import org.apache.spark.storage.{BlockId, StorageLevel}
 import org.apache.spark.util.ThreadUtils
 
@@ -68,13 +69,6 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
       blockIds: Array[String],
       listener: BlockFetchingListener,
       tempFileManager: DownloadFileManager): Unit
-
-  override def fetchSplitBlocks(
-      host: String,
-      port: Int, execId: String,
-      blockIds: Array[String],
-      listener: SplitBlockFetchingListener,
-       downloadFileManager: DownloadFileManager): Unit = Unit
 
   /**
    * Upload a single block to a remote node, available only after [[init]] is invoked.

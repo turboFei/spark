@@ -17,8 +17,6 @@
 
 package org.apache.spark.shuffle
 
-import scala.collection.mutable.ListBuffer
-
 import java.io._
 import java.nio.channels.Channels
 import java.nio.file.Files
@@ -31,6 +29,8 @@ import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.shuffle.IndexShuffleBlockResolver.NOOP_REDUCE_ID
 import org.apache.spark.storage._
 import org.apache.spark.util.Utils
+
+import scala.collection.mutable.ListBuffer
 
 /**
  * Create and maintain the shuffle blocks' mapping between logic block and physical file location.
@@ -364,9 +364,10 @@ private[spark] class IndexShuffleBlockResolver(
     }
   }
 
-  override def getBlockSplitData(blockId: ShuffleBlockId, splitId: Int): ManagedBuffer = {
+  override def getBlockSplitData(splitBlockId: ShuffleSplitBlockId): ManagedBuffer = {
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
+    val blockId = splitBlockId.shuffleBlockId
     val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
 
     // SPARK-22982: if this FileInputStream's position is seeked forward by another piece of code
@@ -388,6 +389,7 @@ private[spark] class IndexShuffleBlockResolver(
           s"expected $expectedPosition but actual position was $actualPosition.")
       }
       val splitNum = nextOffset - offset
+      val splitId = splitBlockId.splId
       if (splitId >= splitNum || splitId < 0) {
         throw new Exception(s"NESPARK-160: Incorrect splitId: splitId is $splitId" +
         s" and should between 0 and $splitNum")

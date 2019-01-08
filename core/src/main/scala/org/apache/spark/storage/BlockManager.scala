@@ -392,7 +392,6 @@ private[spark] class BlockManager(
     }
   }
 
-
   /**
    * Put the block locally, using the given storage level.
    *
