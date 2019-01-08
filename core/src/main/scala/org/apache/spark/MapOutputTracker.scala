@@ -886,10 +886,10 @@ private[spark] object MapOutputTracker extends Logging {
   }
 
   def convertSplitMapStatuses(
-                          shuffleId: Int,
-                          startPartition: Int,
-                          endPartition: Int,
-                          statuses: Array[MapStatus]): Seq[(BlockManagerId, Seq[(BlockId, Long)])] = {
+      shuffleId: Int,
+      startPartition: Int,
+      endPartition: Int,
+      statuses: Array[MapStatus]): Seq[(BlockManagerId, Seq[(BlockId, Long)])] = {
     assert (statuses != null)
     val splitsByAddress = new HashMap[BlockManagerId, ArrayBuffer[(BlockId, Long)]]
     for ((status, mapId) <- statuses.zipWithIndex) {
