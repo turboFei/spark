@@ -780,7 +780,14 @@ private[spark] class ExternalSorter[K, V, C](
     context.taskMetrics().incDiskBytesSpilled(diskBytesSpilled)
     context.taskMetrics().incPeakExecutionMemory(peakMemoryUsedBytes)
 
-    lengths
+    // prevent the lengths has an element which is null
+    lengths.map(lb => {
+      if (lb == null) {
+        new ListBuffer[Long] += 0
+      } else {
+        lb
+      }
+    })
   }
 
   def stop(): Unit = {
