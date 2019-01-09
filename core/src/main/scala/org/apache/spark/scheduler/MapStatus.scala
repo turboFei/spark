@@ -350,7 +350,8 @@ private[spark] class SplitHighlyCompressedMapStatus private (
   override def location: BlockManagerId = loc
 
   override def getSizeForBlock(reduceId: Int): Long = {
-    getSizeForBlock(reduceId, 0)
+    val splitNum = getSplitNumForBlock(reduceId)
+    (0 until splitNum).map(getSizeForBlock(reduceId, _)).sum
   }
 
   override def getSizeForBlock(reduceId: Int, splitId: Int): Long = {
