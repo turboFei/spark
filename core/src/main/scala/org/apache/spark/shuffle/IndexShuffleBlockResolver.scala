@@ -21,6 +21,8 @@ import java.io._
 import java.nio.channels.Channels
 import java.nio.file.Files
 
+import scala.collection.mutable.ListBuffer
+
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
@@ -30,7 +32,6 @@ import org.apache.spark.shuffle.IndexShuffleBlockResolver.NOOP_REDUCE_ID
 import org.apache.spark.storage._
 import org.apache.spark.util.Utils
 
-import scala.collection.mutable.ListBuffer
 
 /**
  * Create and maintain the shuffle blocks' mapping between logic block and physical file location.
@@ -126,10 +127,11 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   /**
-    * Check whether the given index and data files match each other.
-    * If so, return the partition lengths in the data file. Otherwise return null.
-    */
-  private def checkSplitIndexAndDataFile(index: File, data: File, blocks: Int): Array[ListBuffer[Long]] = {
+   * Check whether the given index and data files match each other.
+   * If so, return the partition lengths in the data file. Otherwise return null.
+   */
+  private def checkSplitIndexAndDataFile(index: File, data: File, blocks: Int):
+  Array[ListBuffer[Long]] = {
     // the index file should have `block + 1` longs as offset.
     if (index.length() < (blocks + 1) * 2 * 8L) {
       return null
@@ -186,15 +188,15 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   /**
-    * Write an index file with the offsets of each block, plus a final offset at the end for the
-    * end of the output file. This will be used by getBlockData to figure out where each block
-    * begins and ends.
-    *
-    * It will commit the data and index file as an atomic operation, use the existing ones, or
-    * replace them with new ones.
-    *
-    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
-    */
+   * Write an index file with the offsets of each block, plus a final offset at the end for the
+   * end of the output file. This will be used by getBlockData to figure out where each block
+   * begins and ends.
+   *
+   * It will commit the data and index file as an atomic operation, use the existing ones, or
+   * replace them with new ones.
+   *
+   * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
+   */
   def writeSplitIndexFileAndCommit(
       shuffleId: Int,
       mapId: Int,

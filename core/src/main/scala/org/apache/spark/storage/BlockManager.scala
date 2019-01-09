@@ -582,7 +582,8 @@ private[spark] class BlockManager(
       // TODO: This should gracefully handle case where local block is not available. Currently
       // downstream code will throw an exception.
       val buf = new ChunkedByteBuffer(
-        shuffleBlockResolver.getBlockSplitData(blockId.asInstanceOf[ShuffleSplitBlockId]).nioByteBuffer())
+        shuffleBlockResolver.getBlockSplitData(
+          blockId.asInstanceOf[ShuffleSplitBlockId]).nioByteBuffer())
       Some(new ByteBufferBlockData(buf, true))
     } else if (blockId.isShuffle) {
       val shuffleBlockResolver = shuffleManager.shuffleBlockResolver
@@ -878,10 +879,10 @@ private[spark] class BlockManager(
   }
 
   /**
-    * A short circuited method to get a block writer that can write data directly to disk.
-    * The Block will be appended to the File specified by filename. Callers should handle error
-    * cases.
-    */
+   * A short circuited method to get a block writer that can write data directly to disk.
+   * The Block will be appended to the File specified by filename. Callers should handle error
+   * cases.
+   */
   def getSplitDiskWriter(
   blockId: BlockId,
   file: File,

@@ -49,7 +49,8 @@ private[spark] sealed trait MapStatus {
 
   def getSplitNumForBlock(reduceId: Int): Int
 
-  def isSplitMapStatues: Boolean = isInstanceOf[SplitCompressedMapStatus] || isInstanceOf[SplitHighlyCompressedMapStatus]
+  def isSplitMapStatues: Boolean =
+    isInstanceOf[SplitCompressedMapStatus] || isInstanceOf[SplitHighlyCompressedMapStatus]
 }
 
 
@@ -66,7 +67,7 @@ private[spark] object MapStatus {
     if (uncompressedSizes.length > 2000) {
       SplitHighlyCompressedMapStatus(loc, uncompressedSizes)
     } else {
-      new SplitCompressedMapStatus(loc, uncompressedSizes)
+      new SplitCompressedMapStatus(loc, uncompressedSizes.map(_.toArray))
     }
   }
 
@@ -265,21 +266,22 @@ private[spark] object HighlyCompressedMapStatus {
 }
 
 /**
-  * A [[MapStatus]] implementation that tracks the size of each block. Size for each block is
-  * represented using a single byte.
-  *
-  * @param loc location where the task is being executed.
-  * @param compressedSizes size of the blocks, indexed by reduce partition id.
-  */
+ * A [[MapStatus]] implementation that tracks the size of each block. Size for each block is
+ * represented using a single byte.
+ *
+ * @param loc location where the task is being executed.
+ * @param compressedSizes size of the blocks, indexed by reduce partition id.
+ */
 private[spark] class SplitCompressedMapStatus(
     private[this] var loc: BlockManagerId,
     private[this] var compressedSizes: Array[List[Byte]])
   extends MapStatus with Externalizable {
 
-  protected def this() = this(null, null.asInstanceOf[Array[List[Byte]]])  // For deserialization only
+  // For deserialization only
+  protected def this() = this(null, null.asInstanceOf[Array[List[Byte]]])
 
-  def this(loc: BlockManagerId, uncompressedSizes: Array[List[Long]]) {
-    this(loc, uncompressedSizes.map(list => list.map(MapStatus.compressSize)))
+  def this(loc: BlockManagerId, uncompressedSizes: Array[Array[Long]]) {
+    this(loc, uncompressedSizes.map(list => list.map(MapStatus.compressSize).toList))
   }
 
   override def location: BlockManagerId = loc
@@ -322,16 +324,16 @@ private[spark] class SplitCompressedMapStatus(
 }
 
 /**
-  * A [[MapStatus]] implementation that stores the accurate size of huge blocks, which are larger
-  * than spark.shuffle.accurateBlockThreshold. It stores the average size of other non-empty blocks,
-  * plus a bitmap for tracking which blocks are empty.
-  *
-  * @param loc location where the task is being executed
-  * @param numNonEmptyBlocks the number of non-empty blocks
-  * @param emptyBlocks a bitmap tracking which blocks are empty
-  * @param avgSize average size of the non-empty and non-huge blocks
-  * @param hugeBlockSizes sizes of huge blocks by their reduceId.
-  */
+ * A [[MapStatus]] implementation that stores the accurate size of huge blocks, which are larger
+ * than spark.shuffle.accurateBlockThreshold. It stores the average size of other non-empty blocks,
+ * plus a bitmap for tracking which blocks are empty.
+ *
+ * @param loc location where the task is being executed
+ * @param numNonEmptyBlocks the number of non-empty blocks
+ * @param emptyBlocks a bitmap tracking which blocks are empty
+ * @param avgSize average size of the non-empty and non-huge blocks
+ * @param hugeBlockSizes sizes of huge blocks by their reduceId.
+ */
 private[spark] class SplitHighlyCompressedMapStatus private (
     private[this] var loc: BlockManagerId,
     private[this] var numNonEmptyBlocks: Int,
@@ -359,7 +361,7 @@ private[spark] class SplitHighlyCompressedMapStatus private (
     if (emptyBlocks.contains(reduceId)) {
       0
     } else {
-      hugeBlockSizes.get(ReduceSplitId(reduceId,splitId)) match {
+      hugeBlockSizes.get(ReduceSplitId(reduceId, splitId)) match {
         case Some(size) => MapStatus.decompressSize(size)
         case None => avgSize
       }
@@ -373,7 +375,7 @@ private[spark] class SplitHighlyCompressedMapStatus private (
     loc.writeExternal(out)
     emptyBlocks.writeExternal(out)
     out.writeLong(avgSize)
-    //write split num arr
+    // write split num arr
     out.writeInt(splitNums.length)
     splitNums.foreach { num =>
       out.writeInt(num)
@@ -445,7 +447,7 @@ private[spark] object SplitHighlyCompressedMapStatus {
             totalSmallBlockSize += size
             numSmallBlocks += 1
           } else {
-            hugeBlockSizesArray += Tuple2(new ReduceSplitId(i, j) , MapStatus.compressSize(size))
+            hugeBlockSizesArray += Tuple2(new ReduceSplitId(i, j), MapStatus.compressSize(size))
           }
         } else {
           emptyBlocks.add(i)
@@ -466,7 +468,7 @@ private[spark] object SplitHighlyCompressedMapStatus {
   }
 }
 
-private[spark] case class ReduceSplitId(reduceId:Int, splitId: Int) {
+private[spark] case class ReduceSplitId(reduceId: Int, splitId: Int) {
   override def hashCode(): Int = (reduceId, splitId).##
 
   def canEqual(other: Any): Boolean = other.isInstanceOf[ReduceSplitId]

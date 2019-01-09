@@ -148,8 +148,13 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           mapId,
           context,
           env.conf)
-      case mapOutSplitHandle: MapOutSplitShuffleHandle[K @unchecked, V @unchecked] =>
-        new SortShuffleMapSplitWriter(shuffleBlockResolver, mapOutSplitHandle, mapId, context, env.conf)
+      case mapOutSplitHandle: MapOutSplitShuffleHandle[K @unchecked, V @unchecked, _] =>
+        new SortShuffleMapSplitWriter(
+          shuffleBlockResolver,
+          mapOutSplitHandle,
+          mapId,
+          context,
+          env.conf)
       case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>
         new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)
     }
@@ -235,12 +240,12 @@ private[spark] class BypassMergeSortShuffleHandle[K, V](
 }
 
 /**
-  * Subclass of [[BaseShuffleHandle]], used to identify when we've chosen to use the
-  * map output split shuffle path.
-  */
-private[spark] class MapOutSplitShuffleHandle[K, V](
+ * Subclass of [[BaseShuffleHandle]], used to identify when we've chosen to use the
+ * map output split shuffle path.
+ */
+private[spark] class MapOutSplitShuffleHandle[K, V, C](
    shuffleId: Int,
    numMaps: Int,
-   dependency: ShuffleDependency[K, V, V])
+   dependency: ShuffleDependency[K, V, C])
   extends BaseShuffleHandle(shuffleId, numMaps, dependency) {
 }

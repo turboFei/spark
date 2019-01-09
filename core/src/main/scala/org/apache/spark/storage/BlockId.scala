@@ -126,7 +126,8 @@ object BlockId {
     case SHUFFLE(shuffleId, mapId, reduceId) =>
       ShuffleBlockId(shuffleId.toInt, mapId.toInt, reduceId.toInt)
     case SHUFFLE_SPLIT(shuffleId, mapId, reduceId, splitId) =>
-      ShuffleSplitBlockId(ShuffleBlockId(shuffleId.toInt, mapId.toInt, reduceId.toInt), splitId.toInt)
+      ShuffleSplitBlockId(ShuffleBlockId(shuffleId.toInt, mapId.toInt, reduceId.toInt),
+        splitId.toInt)
     case SHUFFLE_DATA(shuffleId, mapId, reduceId) =>
       ShuffleDataBlockId(shuffleId.toInt, mapId.toInt, reduceId.toInt)
     case SHUFFLE_INDEX(shuffleId, mapId, reduceId) =>

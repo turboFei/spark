@@ -723,13 +723,13 @@ private[spark] class ExternalSorter[K, V, C](
   }
 
   /**
-    * Write all the data added into this ExternalSorter into a file in the disk store. This is
-    * called by the SortShuffleMapSplitWriter.
-    *
-    * @param blockId block ID to write to. The index file will be blockId.name + ".index".
-    * @return array of lengths listBuffer, in bytes, of each partition of the file
-    * (used by map output tracker)
-    */
+   * Write all the data added into this ExternalSorter into a file in the disk store. This is
+   * called by the SortShuffleMapSplitWriter.
+   *
+   * @param blockId block ID to write to. The index file will be blockId.name + ".index".
+   * @return array of lengths listBuffer, in bytes, of each partition of the file
+   * (used by map output tracker)
+   */
   def writeSplitPartitionedFile(
       blockId: BlockId,
       outputFile: File,
@@ -781,13 +781,13 @@ private[spark] class ExternalSorter[K, V, C](
     context.taskMetrics().incPeakExecutionMemory(peakMemoryUsedBytes)
 
     // prevent the lengths has an element which is null
-    lengths.map(lb => {
-      if (lb == null) {
-        List(0)
-      } else {
-        lb
+    var i = 0
+    while (i < numPartitions) {
+      if (lengths(i) == null) {
+        lengths(i) = List(0)
       }
-    })
+    }
+    lengths
   }
 
   def stop(): Unit = {

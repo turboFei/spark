@@ -642,8 +642,9 @@ private[spark] class MapOutputTrackerMaster(
         shuffleStatus.withMapStatuses { statuses =>
           if (!MapOutputTracker.getShuffleSplitState(statuses)) {
             MapOutputTracker.convertMapStatuses(shuffleId, startPartition, endPartition, statuses)
-          }else {
-            MapOutputTracker.convertSplitMapStatuses(shuffleId, startPartition, endPartition, statuses)
+          } else {
+            MapOutputTracker.convertSplitMapStatuses(shuffleId,
+              startPartition, endPartition, statuses)
           }
         }
       case None =>
@@ -902,8 +903,9 @@ private[spark] object MapOutputTracker extends Logging {
           val splitNum = status.getSplitNumForBlock(part)
           val sizeArrayBuffer = new ArrayBuffer[(BlockId, Long)]()
           var i = 0
-          while (i< splitNum) {
-            sizeArrayBuffer += ((ShuffleSplitBlockId(ShuffleBlockId(shuffleId, mapId, part), i), status.getSizeForBlock(part, i)))
+          while (i < splitNum) {
+            sizeArrayBuffer += ((ShuffleSplitBlockId(ShuffleBlockId(shuffleId, mapId, part), i),
+              status.getSizeForBlock(part, i)))
             i += 1
           }
           splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) ++= sizeArrayBuffer
