@@ -21,7 +21,7 @@ import java.io._
 import java.util.Comparator
 
 import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ArrayBuffer
 
 import com.google.common.io.ByteStreams
 
@@ -733,10 +733,10 @@ private[spark] class ExternalSorter[K, V, C](
   def writeSplitPartitionedFile(
       blockId: BlockId,
       outputFile: File,
-      splitThreshold: Long): Array[ListBuffer[Long]] = {
+      splitThreshold: Long): Array[List[Long]] = {
 
     // Track location of each range in the output file
-    val lengths = new Array[ListBuffer[Long]](numPartitions)
+    val lengths = new Array[List[Long]](numPartitions)
     val writer = blockManager.getSplitDiskWriter(blockId, outputFile, serInstance, fileBufferSize,
       context.taskMetrics().shuffleWriteMetrics, splitThreshold)
 
@@ -755,7 +755,7 @@ private[spark] class ExternalSorter[K, V, C](
         if (splitLengths.size == 0 || segment.length > 0) {
           splitLengths += segment.length
         }
-        lengths(partitionId) = splitLengths
+        lengths(partitionId) = splitLengths.toList
       }
     } else {
       // We must perform merge-sort; get an iterator by partition and write everything directly.
@@ -770,7 +770,7 @@ private[spark] class ExternalSorter[K, V, C](
           if(splitLengths.size == 0 || segment.length > 0) {
             splitLengths += segment.length
           }
-          lengths(id) = splitLengths
+          lengths(id) = splitLengths.toList
         }
       }
     }
@@ -783,7 +783,7 @@ private[spark] class ExternalSorter[K, V, C](
     // prevent the lengths has an element which is null
     lengths.map(lb => {
       if (lb == null) {
-        new ListBuffer[Long] += 0
+        List(0)
       } else {
         lb
       }

@@ -198,7 +198,7 @@ private[spark] class IndexShuffleBlockResolver(
   def writeSplitIndexFileAndCommit(
       shuffleId: Int,
       mapId: Int,
-      lengths: Array[ListBuffer[Long]],
+      lengths: Array[List[Long]],
       dataTmp: File): Unit = {
     val indexFile = getIndexFile(shuffleId, mapId)
     val indexTmp = Utils.tempFileWith(indexFile)

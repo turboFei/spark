@@ -20,7 +20,7 @@ package org.apache.spark.scheduler
 import java.io.{Externalizable, ObjectInput, ObjectOutput}
 
 import scala.collection.mutable
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ArrayBuffer
 
 import org.roaringbitmap.RoaringBitmap
 
@@ -62,7 +62,7 @@ private[spark] object MapStatus {
       new CompressedMapStatus(loc, uncompressedSizes)
     }
   }
-  def apply(loc: BlockManagerId, uncompressedSizes: Array[ListBuffer[Long]]): MapStatus = {
+  def apply(loc: BlockManagerId, uncompressedSizes: Array[List[Long]]): MapStatus = {
     if (uncompressedSizes.length > 2000) {
       SplitHighlyCompressedMapStatus(loc, uncompressedSizes)
     } else {
@@ -278,8 +278,8 @@ private[spark] class SplitCompressedMapStatus(
 
   protected def this() = this(null, null.asInstanceOf[Array[List[Byte]]])  // For deserialization only
 
-  def this(loc: BlockManagerId, uncompressedSizes: Array[ListBuffer[Long]]) {
-    this(loc, uncompressedSizes.map(listBuffer => listBuffer.map(MapStatus.compressSize).toList))
+  def this(loc: BlockManagerId, uncompressedSizes: Array[List[Long]]) {
+    this(loc, uncompressedSizes.map(list => list.map(MapStatus.compressSize)))
   }
 
   override def location: BlockManagerId = loc
@@ -411,7 +411,7 @@ private[spark] class SplitHighlyCompressedMapStatus private (
 }
 
 private[spark] object SplitHighlyCompressedMapStatus {
-  def apply(loc: BlockManagerId, uncompressedSizes: Array[ListBuffer[Long]]):
+  def apply(loc: BlockManagerId, uncompressedSizes: Array[List[Long]]):
     SplitHighlyCompressedMapStatus = {
     // We must keep track of which blocks are empty so that we don't report a zero-sized
     // block as being non-empty (or vice-versa) when using the average block size.
