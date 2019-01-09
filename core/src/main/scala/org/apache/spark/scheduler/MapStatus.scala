@@ -48,6 +48,8 @@ private[spark] sealed trait MapStatus {
   def getSizeForBlock(reduceId: Int, splitId: Int): Long
 
   def getSplitNumForBlock(reduceId: Int): Int
+
+  def isSplitMapStatues: Boolean = isInstanceOf[SplitCompressedMapStatus] || isInstanceOf[SplitHighlyCompressedMapStatus]
 }
 
 
