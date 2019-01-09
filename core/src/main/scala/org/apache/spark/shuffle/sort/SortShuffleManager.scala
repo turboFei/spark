@@ -185,7 +185,7 @@ private[spark] object SortShuffleManager extends Logging {
 
   private[this] var useMapOutSplitShuffle: Boolean = false
 
-  def setMapOutSplitShuffle: Unit = {
+  private[shuffle] def setMapOutSplitShuffle: Unit = {
     useMapOutSplitShuffle = true
   }
 
