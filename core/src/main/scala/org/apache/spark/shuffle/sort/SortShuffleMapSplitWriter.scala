@@ -49,7 +49,8 @@ private[spark] class SortShuffleMapSplitWriter[K, V, C](
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
 
   // the split threshold when shuffle write
-  private val splitThreshold = conf.getLong("spark.shuffle.map.split.threshold", 100 * 1024 * 1024)
+  private val splitThreshold = conf.getSizeAsBytes("spark.shuffle.map.split.threshold",
+    100 * 1024 * 1024)
 
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[Product2[K, V]]): Unit = {

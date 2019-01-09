@@ -20,6 +20,7 @@ package org.apache.spark.shuffle.sort;
 import javax.annotation.Nullable;
 import java.io.*;
 import java.nio.channels.FileChannel;
+import java.util.ArrayList;
 import java.util.Iterator;
 
 import scala.Option;
@@ -424,6 +425,90 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     return partitionLengths;
   }
 
+  private ArrayList<Long>[] mergeSplitSpillsWithFileStream(
+          SpillInfo[] spills,
+          File outputFile,
+          @Nullable CompressionCodec compressionCodec) throws IOException {
+    assert (spills.length >= 2);
+    final int numPartitions = partitioner.numPartitions();
+    final ArrayList<Long>[] partitionLengths = new ArrayList[numPartitions];
+    final InputStream[] spillInputStreams = new InputStream[spills.length];
+
+    final OutputStream bos = new BufferedOutputStream(
+            new FileOutputStream(outputFile),
+            outputBufferSizeInBytes);
+    // Use a counting output stream to avoid having to close the underlying file and ask
+    // the file system for its size after each partition is written.
+    final CountingOutputStream mergedFileOutputStream = new CountingOutputStream(bos);
+
+    Long splitThreshold = sparkConf.getSizeAsBytes("spark.shuffle.map.split.threshold",
+            100 * 1024 * 1024);
+
+    boolean threwException = true;
+    try {
+      for (int i = 0; i < spills.length; i++) {
+        spillInputStreams[i] = new NioBufferedFileInputStream(
+                spills[i].file,
+                inputBufferSizeInBytes);
+      }
+      for (int partition = 0; partition < numPartitions; partition++) {
+        final long initialFileLength = mergedFileOutputStream.getByteCount();
+        long lastCommitOff = initialFileLength;
+        int count = 0;
+        ArrayList<Long> splitLengthList = new ArrayList<>(spills.length);
+        // Shield the underlying output stream from close() and flush() calls, so that we can close
+        // the higher level streams to make sure all data is really flushed and internal state is
+        // cleaned.
+        OutputStream partitionOutput = new CloseAndFlushShieldOutputStream(
+                new TimeTrackingOutputStream(writeMetrics, mergedFileOutputStream));
+        partitionOutput = blockManager.serializerManager().wrapForEncryption(partitionOutput);
+        if (compressionCodec != null) {
+          partitionOutput = compressionCodec.compressedOutputStream(partitionOutput);
+        }
+        for (int i = 0; i < spills.length; i++) {
+          final long partitionLengthInSpill = spills[i].partitionLengths[partition];
+          if (partitionLengthInSpill > 0) {
+            InputStream partitionInputStream = new LimitedInputStream(spillInputStreams[i],
+                    partitionLengthInSpill, false);
+            try {
+              partitionInputStream = blockManager.serializerManager().wrapForEncryption(
+                      partitionInputStream);
+              if (compressionCodec != null) {
+                partitionInputStream = compressionCodec.compressedInputStream(partitionInputStream);
+              }
+              ByteStreams.copy(partitionInputStream, partitionOutput);
+              // mark the split length and count
+              count ++;
+              final long tempSplitLength = mergedFileOutputStream.getByteCount() - lastCommitOff;
+              if (tempSplitLength >= splitThreshold * (count + 1) / (count + 2) ) {
+                splitLengthList.add(tempSplitLength);
+                lastCommitOff = mergedFileOutputStream.getByteCount();
+                count = 0;
+              }
+            } finally {
+              partitionInputStream.close();
+            }
+          }
+        }
+        partitionOutput.flush();
+        partitionOutput.close();
+        if (splitLengthList.size() == 0 || mergedFileOutputStream.getByteCount() > lastCommitOff) {
+          splitLengthList.add(mergedFileOutputStream.getByteCount() - lastCommitOff);
+        }
+        partitionLengths[partition] = splitLengthList;
+      }
+      threwException = false;
+    } finally {
+      // To avoid masking exceptions that caused us to prematurely enter the finally block, only
+      // throw exceptions during cleanup if threwException == false.
+      for (InputStream stream : spillInputStreams) {
+        Closeables.close(stream, threwException);
+      }
+      Closeables.close(mergedFileOutputStream, threwException);
+    }
+    return partitionLengths;
+  }
+
   /**
    * Merges spill files by using NIO's transferTo to concatenate spill partitions' bytes.
    * This is only safe when the IO compression codec and serializer support concatenation of
@@ -476,6 +561,82 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
             " version to see if it is 2.6.32, as there is a kernel bug which will lead to " +
             "unexpected behavior when using transferTo. You can set spark.file.transferTo=false " +
             "to disable this NIO feature."
+        );
+      }
+      threwException = false;
+    } finally {
+      // To avoid masking exceptions that caused us to prematurely enter the finally block, only
+      // throw exceptions during cleanup if threwException == false.
+      for (int i = 0; i < spills.length; i++) {
+        assert(spillInputChannelPositions[i] == spills[i].file.length());
+        Closeables.close(spillInputChannels[i], threwException);
+      }
+      Closeables.close(mergedFileOutputChannel, threwException);
+    }
+    return partitionLengths;
+  }
+
+  private ArrayList<Long>[] mergeSplitSpillsWithTransferTo(SpillInfo[] spills, File outputFile) throws IOException {
+    assert (spills.length >= 2);
+    final int numPartitions = partitioner.numPartitions();
+    final ArrayList<Long>[] partitionLengths = new ArrayList[10];
+    final FileChannel[] spillInputChannels = new FileChannel[spills.length];
+    final long[] spillInputChannelPositions = new long[spills.length];
+    FileChannel mergedFileOutputChannel = null;
+    Long splitThreshold = sparkConf.getSizeAsBytes("spark.shuffle.map.split.threshold",
+            100 * 1024 * 1024);
+
+    boolean threwException = true;
+    try {
+      for (int i = 0; i < spills.length; i++) {
+        spillInputChannels[i] = new FileInputStream(spills[i].file).getChannel();
+      }
+      // This file needs to opened in append mode in order to work around a Linux kernel bug that
+      // affects transferTo; see SPARK-3948 for more details.
+      mergedFileOutputChannel = new FileOutputStream(outputFile, true).getChannel();
+
+      long bytesWrittenToMergedFile = 0;
+      for (int partition = 0; partition < numPartitions; partition++) {
+        long tempSplitFileLength = 0l;
+        int count = 0;
+        ArrayList<Long> splitLengthList = new ArrayList<>(spills.length);
+        for (int i = 0; i < spills.length; i++) {
+          final long partitionLengthInSpill = spills[i].partitionLengths[partition];
+          final FileChannel spillInputChannel = spillInputChannels[i];
+          final long writeStartTime = System.nanoTime();
+          Utils.copyFileStreamNIO(
+                  spillInputChannel,
+                  mergedFileOutputChannel,
+                  spillInputChannelPositions[i],
+                  partitionLengthInSpill);
+          spillInputChannelPositions[i] += partitionLengthInSpill;
+          writeMetrics.incWriteTime(System.nanoTime() - writeStartTime);
+          bytesWrittenToMergedFile += partitionLengthInSpill;
+          //split the file
+          tempSplitFileLength += partitionLengthInSpill;
+          count ++;
+          if (tempSplitFileLength >= splitThreshold * (count + 1) / (count + 2)) {
+            splitLengthList.add(tempSplitFileLength);
+            tempSplitFileLength = 0;
+            count = 0;
+          }
+        }
+        if (splitLengthList.size() == 0 || tempSplitFileLength > 0) {
+          splitLengthList.add(tempSplitFileLength);
+        }
+        partitionLengths[partition] = splitLengthList;
+      }
+      // Check the position after transferTo loop to see if it is in the right position and raise an
+      // exception if it is incorrect. The position will not be increased to the expected length
+      // after calling transferTo in kernel version 2.6.32. This issue is described at
+      // https://bugs.openjdk.java.net/browse/JDK-7052359 and SPARK-3948.
+      if (mergedFileOutputChannel.position() != bytesWrittenToMergedFile) {
+        throw new IOException(
+                "Current position " + mergedFileOutputChannel.position() + " does not equal expected " +
+                        "position " + bytesWrittenToMergedFile + " after transferTo. Please check your kernel" +
+                        " version to see if it is 2.6.32, as there is a kernel bug which will lead to " +
+                        "unexpected behavior when using transferTo. You can set spark.file.transferTo=false " +
+                        "to disable this NIO feature."
         );
       }
       threwException = false;
