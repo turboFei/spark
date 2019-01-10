@@ -26,6 +26,7 @@ import java.util.Iterator;
 import scala.Option;
 import scala.Product2;
 import scala.collection.JavaConverters;
+import scala.collection.immutable.List;
 import scala.reflect.ClassTag;
 import scala.reflect.ClassTag$;
 
@@ -188,7 +189,11 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       while (records.hasNext()) {
         insertRecordIntoSorter(records.next());
       }
-      closeAndWriteOutput();
+      if (SortShuffleManager.canUseMapOutSplitShuffle(sparkConf)) {
+        closeAndWriteOutputSplit();
+      } else {
+        closeAndWriteOutput();
+      }
       success = true;
     } finally {
       if (sorter != null) {
@@ -250,6 +255,40 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       }
     }
     mapStatus = MapStatus$.MODULE$.apply(blockManager.shuffleServerId(), partitionLengths);
+  }
+
+  @VisibleForTesting
+  void closeAndWriteOutputSplit() throws  IOException {
+    assert(sorter != null);
+    updatePeakMemoryUsed();
+    serBuffer = null;
+    serOutputStream = null;
+    final SpillInfo[] spills = sorter.closeAndGetSpills();
+    sorter = null;
+    final ArrayList<Long>[] partitionLengths;
+    List[] lengths = new List[partitioner.numPartitions()];
+    final File output = shuffleBlockResolver.getDataFile(shuffleId, mapId);
+    final File tmp = Utils.tempFileWith(output);
+    try {
+      try {
+        partitionLengths = mergeSpillsSplit(spills, tmp);
+      } finally {
+        for (SpillInfo spill : spills) {
+          if (spill.file.exists() && ! spill.file.delete()) {
+            logger.error("Error while deleting spill file {}", spill.file.getPath());
+          }
+        }
+      }
+      for (int i = 0; i < partitionLengths.length; i ++) {
+        lengths[i] = JavaConverters.asScalaBufferConverter(partitionLengths[i]).asScala().toList();
+      }
+      shuffleBlockResolver.writeSplitIndexFileAndCommit(shuffleId, mapId, lengths, tmp);
+    } finally {
+      if (tmp.exists() && !tmp.delete()) {
+        logger.error("Error while deleting temp file {}", tmp.getAbsolutePath());
+      }
+    }
+    mapStatus = MapStatus$.MODULE$.apply(blockManager.shuffleServerId(), lengths);
   }
 
   @VisibleForTesting
@@ -324,6 +363,78 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
         } else {
           logger.debug("Using slow merge");
           partitionLengths = mergeSpillsWithFileStream(spills, outputFile, compressionCodec);
+        }
+        // When closing an UnsafeShuffleExternalSorter that has already spilled once but also has
+        // in-memory records, we write out the in-memory records to a file but do not count that
+        // final write as bytes spilled (instead, it's accounted as shuffle write). The merge needs
+        // to be counted as shuffle write, but this will lead to double-counting of the final
+        // SpillInfo's bytes.
+        writeMetrics.decBytesWritten(spills[spills.length - 1].file.length());
+        writeMetrics.incBytesWritten(outputFile.length());
+        return partitionLengths;
+      }
+    } catch (IOException e) {
+      if (outputFile.exists() && !outputFile.delete()) {
+        logger.error("Unable to delete output file {}", outputFile.getPath());
+      }
+      throw e;
+    }
+  }
+
+  private ArrayList<Long>[] mergeSpillsSplit(SpillInfo[] spills, File outputFile) throws IOException {
+    final boolean compressionEnabled = sparkConf.getBoolean("spark.shuffle.compress", true);
+    final CompressionCodec compressionCodec = CompressionCodec$.MODULE$.createCodec(sparkConf);
+    final boolean fastMergeEnabled =
+            sparkConf.getBoolean("spark.shuffle.unsafe.fastMergeEnabled", true);
+    final boolean fastMergeIsSupported = !compressionEnabled ||
+            CompressionCodec$.MODULE$.supportsConcatenationOfSerializedStreams(compressionCodec);
+    final boolean encryptionEnabled = blockManager.serializerManager().encryptionEnabled();
+    try {
+      if (spills.length == 0) {
+        new FileOutputStream(outputFile).close(); // Create an empty file
+        ArrayList<Long> arr0 = new ArrayList<>(1);
+        arr0.add(0l);
+        ArrayList<Long>[] lengths = new ArrayList[partitioner.numPartitions()];
+        for (int i = 0; i < partitioner.numPartitions(); i ++) {
+          lengths[i] = new ArrayList<>(arr0);
+        }
+        return lengths;
+      } else if (spills.length == 1) {
+        // Here, we don't need to perform any metrics updates because the bytes written to this
+        // output file would have already been counted as shuffle bytes written.
+        Files.move(spills[0].file, outputFile);
+        ArrayList<Long>[] lengths = new ArrayList[partitioner.numPartitions()];
+        for (int i = 0; i < partitioner.numPartitions(); i ++) {
+          lengths[i] = new ArrayList<>(1);
+          lengths[i].add(spills[0].partitionLengths[i]);
+        }
+        return lengths;
+      } else {
+        final ArrayList<Long>[] partitionLengths;
+        // There are multiple spills to merge, so none of these spill files' lengths were counted
+        // towards our shuffle write count or shuffle write time. If we use the slow merge path,
+        // then the final output file's size won't necessarily be equal to the sum of the spill
+        // files' sizes. To guard against this case, we look at the output file's actual size when
+        // computing shuffle bytes written.
+        //
+        // We allow the individual merge methods to report their own IO times since different merge
+        // strategies use different IO techniques.  We count IO during merge towards the shuffle
+        // shuffle write time, which appears to be consistent with the "not bypassing merge-sort"
+        // branch in ExternalSorter.
+        if (fastMergeEnabled && fastMergeIsSupported) {
+          // Compression is disabled or we are using an IO compression codec that supports
+          // decompression of concatenated compressed streams, so we can perform a fast spill merge
+          // that doesn't need to interpret the spilled bytes.
+          if (transferToEnabled && !encryptionEnabled) {
+            logger.debug("Using transferTo-based fast merge");
+            partitionLengths = mergeSplitSpillsWithTransferTo(spills, outputFile);
+          } else {
+            logger.debug("Using fileStream-based fast merge");
+            partitionLengths = mergeSplitSpillsWithFileStream(spills, outputFile, null);
+          }
+        } else {
+          logger.debug("Using slow merge");
+          partitionLengths = mergeSplitSpillsWithFileStream(spills, outputFile, compressionCodec);
         }
         // When closing an UnsafeShuffleExternalSorter that has already spilled once but also has
         // in-memory records, we write out the in-memory records to a file but do not count that
@@ -579,7 +690,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   private ArrayList<Long>[] mergeSplitSpillsWithTransferTo(SpillInfo[] spills, File outputFile) throws IOException {
     assert (spills.length >= 2);
     final int numPartitions = partitioner.numPartitions();
-    final ArrayList<Long>[] partitionLengths = new ArrayList[10];
+    final ArrayList<Long>[] partitionLengths = new ArrayList[numPartitions];
     final FileChannel[] spillInputChannels = new FileChannel[spills.length];
     final long[] spillInputChannelPositions = new long[spills.length];
     FileChannel mergedFileOutputChannel = null;
@@ -614,7 +725,9 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
           bytesWrittenToMergedFile += partitionLengthInSpill;
           //split the file
           tempSplitFileLength += partitionLengthInSpill;
-          count ++;
+          if (partitionLengthInSpill > 0) {
+            count++;
+          }
           if (tempSplitFileLength >= splitThreshold * (count + 1) / (count + 2)) {
             splitLengthList.add(tempSplitFileLength);
             tempSplitFileLength = 0;
