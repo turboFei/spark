@@ -189,7 +189,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       while (records.hasNext()) {
         insertRecordIntoSorter(records.next());
       }
-      if (SortShuffleManager.canUseMapOutSplitShuffle(sparkConf)) {
+      if (SortShuffleManager.canUseMapOutSplitUnsafeShuffle(sparkConf)) {
         closeAndWriteOutputSplit();
       } else {
         closeAndWriteOutput();

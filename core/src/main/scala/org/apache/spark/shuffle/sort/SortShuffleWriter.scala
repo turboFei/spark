@@ -73,9 +73,10 @@ private[spark] class SortShuffleWriter[K, V, C](
     val tmp = Utils.tempFileWith(output)
     try {
       val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
-      if (SortShuffleManager.canUseMapOutSplitShuffle(conf)) {
+      if (SortShuffleManager.canUseMapOutSplitSortShuffle(conf)) {
         val partitionLengths = sorter.writeSplitPartitionedFile(blockId, tmp, splitThreshold)
-        shuffleBlockResolver.writeSplitIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
+        shuffleBlockResolver.writeSplitIndexFileAndCommit(dep.shuffleId,
+          mapId, partitionLengths, tmp)
         mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
       } else {
         val partitionLengths = sorter.writePartitionedFile(blockId, tmp)

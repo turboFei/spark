@@ -202,8 +202,15 @@ private[spark] object SortShuffleManager extends Logging {
     }
   }
 
-  def canUseMapOutSplitShuffle(conf: SparkConf): Boolean = {
-    conf.getBoolean("spark.shuffle.map.split", false)
+  def canUseMapOutSplitUnsafeShuffle(conf: SparkConf): Boolean = {
+    conf.getBoolean("spark.shuffle.map.split", false) &&
+      conf.getBoolean("spark.shuffle.unsafe.map.split", true)
+
+  }
+
+  def canUseMapOutSplitSortShuffle(conf: SparkConf): Boolean = {
+    conf.getBoolean("spark.shuffle.map.split", false) &&
+      conf.getBoolean("spark.shuffle.sort.map.split", true)
   }
 }
 
