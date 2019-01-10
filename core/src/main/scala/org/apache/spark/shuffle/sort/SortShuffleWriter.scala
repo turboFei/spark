@@ -29,7 +29,8 @@ private[spark] class SortShuffleWriter[K, V, C](
     shuffleBlockResolver: IndexShuffleBlockResolver,
     handle: BaseShuffleHandle[K, V, C],
     mapId: Int,
-    context: TaskContext)
+    context: TaskContext,
+    conf: SparkConf)
   extends ShuffleWriter[K, V] with Logging {
 
   private val dep = handle.dependency
@@ -46,6 +47,9 @@ private[spark] class SortShuffleWriter[K, V, C](
   private var mapStatus: MapStatus = null
 
   private val writeMetrics = context.taskMetrics().shuffleWriteMetrics
+
+  private lazy val splitThreshold = conf.getSizeAsBytes("spark.shuffle.map.split.threshold",
+    100 * 1024 * 1024)
 
   /** Write a bunch of records to this task's output */
   override def write(records: Iterator[Product2[K, V]]): Unit = {
@@ -69,9 +73,15 @@ private[spark] class SortShuffleWriter[K, V, C](
     val tmp = Utils.tempFileWith(output)
     try {
       val blockId = ShuffleBlockId(dep.shuffleId, mapId, IndexShuffleBlockResolver.NOOP_REDUCE_ID)
-      val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
-      shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
-      mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
+      if (SortShuffleManager.canUseMapOutSplitShuffle(conf)) {
+        val partitionLengths = sorter.writeSplitPartitionedFile(blockId, tmp, splitThreshold)
+        shuffleBlockResolver.writeSplitIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
+        mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
+      } else {
+        val partitionLengths = sorter.writePartitionedFile(blockId, tmp)
+        shuffleBlockResolver.writeIndexFileAndCommit(dep.shuffleId, mapId, partitionLengths, tmp)
+        mapStatus = MapStatus(blockManager.shuffleServerId, partitionLengths)
+      }
     } finally {
       if (tmp.exists() && !tmp.delete()) {
         logError(s"Error while deleting temp file ${tmp.getAbsolutePath}")

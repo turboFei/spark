@@ -100,9 +100,6 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
       // Otherwise, try to buffer map outputs in a serialized form, since this is more efficient:
       new SerializedShuffleHandle[K, V](
         shuffleId, numMaps, dependency.asInstanceOf[ShuffleDependency[K, V, V]])
-    } else if (SortShuffleManager.canUseMapOutSplitShuffle(conf)) {
-      // Otherwise, try to split the map output
-      new MapOutSplitShuffleHandle(shuffleId, numMaps, dependency)
     } else {
       // Otherwise, buffer map outputs in a deserialized form:
       new BaseShuffleHandle(shuffleId, numMaps, dependency)
@@ -148,15 +145,8 @@ private[spark] class SortShuffleManager(conf: SparkConf) extends ShuffleManager 
           mapId,
           context,
           env.conf)
-      case mapOutSplitHandle: MapOutSplitShuffleHandle[K @unchecked, V @unchecked, _] =>
-        new SortShuffleMapSplitWriter(
-          shuffleBlockResolver,
-          mapOutSplitHandle,
-          mapId,
-          context,
-          env.conf)
       case other: BaseShuffleHandle[K @unchecked, V @unchecked, _] =>
-        new SortShuffleWriter(shuffleBlockResolver, other, mapId, context)
+        new SortShuffleWriter(shuffleBlockResolver, other, mapId, context, env.conf)
     }
   }
 
@@ -236,16 +226,5 @@ private[spark] class BypassMergeSortShuffleHandle[K, V](
   shuffleId: Int,
   numMaps: Int,
   dependency: ShuffleDependency[K, V, V])
-  extends BaseShuffleHandle(shuffleId, numMaps, dependency) {
-}
-
-/**
- * Subclass of [[BaseShuffleHandle]], used to identify when we've chosen to use the
- * map output split shuffle path.
- */
-private[spark] class MapOutSplitShuffleHandle[K, V, C](
-   shuffleId: Int,
-   numMaps: Int,
-   dependency: ShuffleDependency[K, V, C])
   extends BaseShuffleHandle(shuffleId, numMaps, dependency) {
 }
