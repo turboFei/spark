@@ -282,6 +282,7 @@ public class UnsafeShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       for (int i = 0; i < partitionLengths.length; i ++) {
         lengths[i] = JavaConverters.asScalaBufferConverter(partitionLengths[i]).asScala().toList();
       }
+      // TODO: the scala type eraser, tuning
       shuffleBlockResolver.writeSplitIndexFileAndCommit(shuffleId, mapId, lengths, tmp);
     } finally {
       if (tmp.exists() && !tmp.delete()) {
