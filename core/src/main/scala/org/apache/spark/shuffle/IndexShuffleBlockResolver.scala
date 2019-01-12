@@ -131,12 +131,12 @@ private[spark] class IndexShuffleBlockResolver(
    * If so, return the partition lengths in the data file. Otherwise return null.
    */
   private def checkSplitIndexAndDataFile(index: File, data: File, blocks: Int):
-  Array[ListBuffer[Long]] = {
+  Array[List[Long]] = {
     // the index file should have `block + 1` longs as offset.
     if (index.length() < (blocks + 1) * 2 * 8L) {
       return null
     }
-    val lengths = new Array[ListBuffer[Long]](blocks)
+    val lengths = new Array[List[Long]](blocks)
     val splitLengths = new Array[Long](blocks)
     // Read the lengths of blocks
     val in = try {
@@ -169,7 +169,7 @@ private[spark] class IndexShuffleBlockResolver(
           offset = off
           j += 1
         }
-        lengths(i) = splitLengthList
+        lengths(i) = splitLengthList.toList
         i += 1
       }
     } catch {
