@@ -640,7 +640,7 @@ private[spark] class MapOutputTrackerMaster(
     shuffleStatuses.get(shuffleId) match {
       case Some (shuffleStatus) =>
         shuffleStatus.withMapStatuses { statuses =>
-          if (!MapOutputTracker.getShuffleSplitState(statuses)) {
+          if (!SortShuffleManager.canUseMapOutSplitShuffle(conf)) {
             MapOutputTracker.convertMapStatuses(shuffleId, startPartition, endPartition, statuses)
           } else {
             MapOutputTracker.convertSplitMapStatuses(shuffleId,
@@ -680,7 +680,7 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
     logDebug(s"Fetching outputs for shuffle $shuffleId, partitions $startPartition-$endPartition")
     val statuses = getStatuses(shuffleId)
     try {
-      if (!MapOutputTracker.getShuffleSplitState(statuses)) {
+      if (!SortShuffleManager.canUseMapOutSplitShuffle(conf)) {
         MapOutputTracker.convertMapStatuses(shuffleId, startPartition, endPartition, statuses)
       } else {
         MapOutputTracker.convertSplitMapStatuses(shuffleId, startPartition, endPartition, statuses)
@@ -914,11 +914,5 @@ private[spark] object MapOutputTracker extends Logging {
     }
 
     splitsByAddress.toSeq
-  }
-
-  def getShuffleSplitState(status: Array[MapStatus]): Boolean = {
-    status != null && status.exists(statue => {
-      statue != null && statue.isSplitMapStatues
-    })
   }
 }
