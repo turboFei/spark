@@ -786,6 +786,7 @@ private[spark] class ExternalSorter[K, V, C](
       if (lengths(i) == null) {
         lengths(i) = List(0)
       }
+      i += 1
     }
     lengths
   }
