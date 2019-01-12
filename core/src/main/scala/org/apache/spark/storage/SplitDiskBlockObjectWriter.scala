@@ -105,7 +105,7 @@ private[spark] class SplitDiskBlockObjectWriter(
   /**
    * a listBuffer to record the split lengths of records
    */
-  private var splitLengths: ListBuffer[Long] = null
+  private lazy val splitLengths = new ListBuffer[Long]()
 
   private def initialize(): Unit = {
     fos = new FileOutputStream(file, true)
@@ -114,7 +114,6 @@ private[spark] class SplitDiskBlockObjectWriter(
     class ManualCloseBufferedOutputStream
       extends BufferedOutputStream(ts, bufferSize) with ManualCloseOutputStream
     mcs = new ManualCloseBufferedOutputStream
-    splitLengths = new ListBuffer[Long]
   }
 
   def open(): SplitDiskBlockObjectWriter = {
