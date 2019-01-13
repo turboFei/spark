@@ -133,7 +133,7 @@ private[spark] class IndexShuffleBlockResolver(
   private def checkSplitIndexAndDataFile(index: File, data: File, blocks: Int):
   Array[List[Long]] = {
     // the index file should have `block + 1` longs as offset.
-    if (index.length() < (blocks + 1) * 2 * 8L) {
+    if (index.length() < ((blocks + 1) * 2 + 1) * 8L) {
       return null
     }
     val lengths = new Array[List[Long]](blocks)
@@ -146,6 +146,11 @@ private[spark] class IndexShuffleBlockResolver(
         return null
     }
     try {
+      val reduceNum = in.readLong()
+      // if blocks not equal the head int in indexFile
+      if (reduceNum != blocks) {
+        return null
+      }
       // Convert the offsets into lengths of each block
       var splitOffset = in.readLong()
       var i = 0
@@ -207,8 +212,10 @@ private[spark] class IndexShuffleBlockResolver(
     try {
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
       Utils.tryWithSafeFinally {
+        // write the reduceNums for read from indexFile
+        out.writeLong(lengths.length)
         //  each reduceId point to split lengths offset, first level index
-        var lengthsOffset = lengths.length + 1
+        var lengthsOffset = lengths.length + 2
         var offset = 0L
         for (splitLengths <- lengths) {
           out.writeLong(lengthsOffset)
@@ -379,13 +386,20 @@ private[spark] class IndexShuffleBlockResolver(
     // class of issue from re-occurring in the future which is why they are left here even though
     // SPARK-22982 is fixed.
     val channel = Files.newByteChannel(indexFile.toPath)
-    channel.position(blockId.reduceId * 8L)
     val in = new DataInputStream(Channels.newInputStream(channel))
     try {
+      // the head int in indexfile is reduceNum
+      val reduceNum = in.readLong()
+      val reduceId = blockId.reduceId
+      if (blockId.reduceId >= reduceNum) {
+        throw new Exception(s"NESPARK-160: Incorrect reduceId: " +
+        s"reduceId $reduceId is bigger than reduceNum $reduceNum")
+      }
+      channel.position((reduceId + 1) * 8L)
       val offset = in.readLong()
       val nextOffset = in.readLong()
       val actualPosition = channel.position()
-      val expectedPosition = blockId.reduceId * 8L + 16
+      val expectedPosition = (reduceId + 1) * 8L + 16
       if (actualPosition != expectedPosition) {
         throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
           s"expected $expectedPosition but actual position was $actualPosition.")
