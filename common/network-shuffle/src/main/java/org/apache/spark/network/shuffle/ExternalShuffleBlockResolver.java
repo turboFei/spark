@@ -75,6 +75,7 @@ public class ExternalShuffleBlockResolver {
    *  for each block fetch.
    */
   private final LoadingCache<File, ShuffleIndexInformation> shuffleIndexCache;
+  private final LoadingCache<File, SplitShuffleIndexInformation> splitShuffleIndexCache;
 
   // Single-threaded Java executor used to perform expensive recursive directory deletion.
   private final Executor directoryCleaner;
@@ -120,6 +121,21 @@ public class ExternalShuffleBlockResolver {
         }
       })
       .build(indexCacheLoader);
+    // split shuffle cache
+    CacheLoader<File, SplitShuffleIndexInformation> splitIndexCacheLoader =
+        new CacheLoader<File, SplitShuffleIndexInformation>() {
+          public SplitShuffleIndexInformation load(File file) throws IOException {
+            return new SplitShuffleIndexInformation(file);
+          }
+        };
+    splitShuffleIndexCache = CacheBuilder.newBuilder()
+      .maximumWeight(JavaUtils.byteStringAsBytes(indexCacheSize))
+      .weigher(new Weigher<File, SplitShuffleIndexInformation>() {
+        public int weigh(File file, SplitShuffleIndexInformation indexInfo) {
+          return indexInfo.getSize();
+        }
+      })
+      .build(splitIndexCacheLoader);
     db = LevelDBProvider.initLevelDB(this.registeredExecutorFile, CURRENT_VERSION, mapper);
     if (db != null) {
       executors = reloadRegisteredExecutors(db);
@@ -173,6 +189,23 @@ public class ExternalShuffleBlockResolver {
     }
     return getSortBasedShuffleBlockData(executor, shuffleId, mapId, reduceId);
   }
+
+  public ManagedBuffer getBlockData(
+          String appId,
+          String execId,
+          int shuffleId,
+          int mapId,
+          int reduceId,
+          int splitId) {
+    ExecutorShuffleInfo executor = executors.get(new AppExecId(appId, execId));
+    if (executor == null) {
+      throw new RuntimeException(
+              String.format("Executor is not registered (appId=%s, execId=%s)", appId, execId));
+    }
+    return getSortBasedShuffleBlockData(executor, shuffleId, mapId, reduceId, splitId);
+  }
+
+
 
   /**
    * Removes our metadata of all executors registered for the given application, and optionally
@@ -245,6 +278,25 @@ public class ExternalShuffleBlockResolver {
           "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
         shuffleIndexRecord.getOffset(),
         shuffleIndexRecord.getLength());
+    } catch (ExecutionException e) {
+      throw new RuntimeException("Failed to open file: " + indexFile, e);
+    }
+  }
+
+  private ManagedBuffer getSortBasedShuffleBlockData(
+          ExecutorShuffleInfo executor, int shuffleId, int mapId, int reduceId, int splitId) {
+    File indexFile = getFile(executor.localDirs, executor.subDirsPerLocalDir,
+            "shuffle_" + shuffleId + "_" + mapId + "_0.index");
+
+    try {
+      SplitShuffleIndexInformation shuffleIndexInformation = splitShuffleIndexCache.get(indexFile);
+      ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(reduceId, splitId);
+      return new FileSegmentManagedBuffer(
+              conf,
+              getFile(executor.localDirs, executor.subDirsPerLocalDir,
+                      "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
+              shuffleIndexRecord.getOffset(),
+              shuffleIndexRecord.getLength());
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     }

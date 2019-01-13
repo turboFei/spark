@@ -90,8 +90,15 @@ public class ExternalShuffleBlockHandler extends RpcHandler {
       try {
         OpenBlocks msg = (OpenBlocks) msgObj;
         checkAuth(client, msg.appId);
-        long streamId = streamManager.registerStream(client.getClientId(),
-          new ManagedBufferIterator(msg.appId, msg.execId, msg.blockIds));
+        long streamId;
+        if (msg.blockIds[0].split("_").length == 5) {
+          streamId = streamManager.registerStream(client.getClientId(),
+                  new ManagedSplitBufferIterator(msg.appId, msg.execId, msg.blockIds));
+
+        } else {
+           streamId = streamManager.registerStream(client.getClientId(),
+                  new ManagedBufferIterator(msg.appId, msg.execId, msg.blockIds));
+        }
         if (logger.isTraceEnabled()) {
           logger.trace("Registered streamId {} with {} buffers for client {} from host {}",
                        streamId,
@@ -231,6 +238,55 @@ public class ExternalShuffleBlockHandler extends RpcHandler {
     public ManagedBuffer next() {
       final ManagedBuffer block = blockManager.getBlockData(appId, execId, shuffleId,
         mapIdAndReduceIds[index], mapIdAndReduceIds[index + 1]);
+      index += 2;
+      metrics.blockTransferRateBytes.mark(block != null ? block.size() : 0);
+      return block;
+    }
+  }
+
+  private class ManagedSplitBufferIterator implements Iterator<ManagedBuffer> {
+
+    private int index = 0;
+    private final String appId;
+    private final String execId;
+    private final int shuffleId;
+    // An array containing mapId and reduceId pairs.
+    private final int[] mapIdAndReduceIdSplitIds;
+
+    ManagedSplitBufferIterator(String appId, String execId, String[] blockIds) {
+      this.appId = appId;
+      this.execId = execId;
+      String[] blockId0Parts = blockIds[0].split("_");
+      if (blockId0Parts.length != 5 || !blockId0Parts[0].equals("shuffle")) {
+        throw new IllegalArgumentException("Unexpected shuffle block id format: " + blockIds[0]);
+      }
+      this.shuffleId = Integer.parseInt(blockId0Parts[1]);
+      mapIdAndReduceIdSplitIds = new int[3 * blockIds.length];
+      for (int i = 0; i < blockIds.length; i++) {
+        String[] blockIdParts = blockIds[i].split("_");
+        if (blockIdParts.length != 5 || !blockIdParts[0].equals("shuffle")) {
+          throw new IllegalArgumentException("Unexpected shuffle block id format: " + blockIds[i]);
+        }
+        if (Integer.parseInt(blockIdParts[1]) != shuffleId) {
+          throw new IllegalArgumentException("Expected shuffleId=" + shuffleId +
+                  ", got:" + blockIds[i]);
+        }
+        mapIdAndReduceIdSplitIds[3 * i] = Integer.parseInt(blockIdParts[2]);
+        mapIdAndReduceIdSplitIds[3 * i + 1] = Integer.parseInt(blockIdParts[3]);
+        mapIdAndReduceIdSplitIds[3 * i + 2] = Integer.parseInt(blockIdParts[4]);
+      }
+    }
+
+    @Override
+    public boolean hasNext() {
+      return index < mapIdAndReduceIdSplitIds.length;
+    }
+
+    @Override
+    public ManagedBuffer next() {
+      final ManagedBuffer block = blockManager.getBlockData(appId, execId, shuffleId,
+              mapIdAndReduceIdSplitIds[index], mapIdAndReduceIdSplitIds[index + 1],
+              mapIdAndReduceIdSplitIds[index + 2]);
       index += 2;
       metrics.blockTransferRateBytes.mark(block != null ? block.size() : 0);
       return block;
