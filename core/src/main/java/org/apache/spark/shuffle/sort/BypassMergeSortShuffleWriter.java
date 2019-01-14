@@ -192,8 +192,8 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
 
   public void writeRecordsSplit(Iterator<Product2<K, V>> records) throws IOException {
     assert (splitPatitionWriters == null);
+    splitPartitionLengths = new List[numPartitions];
     if (!records.hasNext()) {
-      splitPartitionLengths = new List[numPartitions];
       for ( int i = 0; i < numPartitions; i++) {
         ArrayList<Long> tempList = new ArrayList<>(1);
         tempList.add(0l);
