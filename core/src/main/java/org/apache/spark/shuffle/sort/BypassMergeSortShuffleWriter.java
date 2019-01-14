@@ -21,6 +21,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import javax.annotation.Nullable;
 
 import scala.None$;
@@ -28,6 +29,8 @@ import scala.Option;
 import scala.Product2;
 import scala.Tuple2;
 import scala.collection.Iterator;
+import scala.collection.JavaConverters;
+import scala.collection.immutable.List;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.io.Closeables;
@@ -91,6 +94,12 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   @Nullable private MapStatus mapStatus;
   private long[] partitionLengths;
 
+  /** Variable for split Shuffle   */
+  private final Boolean isSplitShuffle;
+  private long splitThreshold;
+  private SplitDiskBlockObjectWriter[] splitPatitionWriters;
+  private List[] splitPartitionLengths;
+
   /**
    * Are we in the process of stopping? Because map tasks can call stop() with success = true
    * and then call stop() with success = false if they get an exception, we want to make sure
@@ -117,10 +126,21 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     this.writeMetrics = taskContext.taskMetrics().shuffleWriteMetrics();
     this.serializer = dep.serializer();
     this.shuffleBlockResolver = shuffleBlockResolver;
+    this.isSplitShuffle = conf.getBoolean("spark.shuffle.map.split", false);
+    this.splitThreshold =  conf.getSizeAsBytes("spark.shuffle.map.split.threshold",
+            100 * 1024 * 1024);
   }
 
   @Override
   public void write(Iterator<Product2<K, V>> records) throws IOException {
+    if(isSplitShuffle) {
+      writeRecordsSplit(records);
+    } else {
+      writeRecords(records);
+    }
+  }
+
+  public void writeRecords(Iterator<Product2<K, V>> records) throws IOException {
     assert (partitionWriters == null);
     if (!records.hasNext()) {
       partitionLengths = new long[numPartitions];
@@ -170,6 +190,88 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
     mapStatus = MapStatus$.MODULE$.apply(blockManager.shuffleServerId(), partitionLengths);
   }
 
+  public void writeRecordsSplit(Iterator<Product2<K, V>> records) throws IOException {
+    assert (splitPatitionWriters == null);
+    if (!records.hasNext()) {
+      splitPartitionLengths = new List[numPartitions];
+      for ( int i = 0; i < numPartitions; i++) {
+        ArrayList<Long> tempList = new ArrayList<>(1);
+        tempList.add(0l);
+        splitPartitionLengths[i] = JavaConverters.asScalaBufferConverter(tempList).asScala().toList();
+      }
+      shuffleBlockResolver.writeSplitIndexFileAndCommit(shuffleId, mapId, splitPartitionLengths, null);
+      mapStatus = MapStatus$.MODULE$.apply(blockManager.shuffleServerId(), splitPartitionLengths);
+      return;
+    }
+    final SerializerInstance serInstance = serializer.newInstance();
+    final long openStartTime = System.nanoTime();
+    splitPatitionWriters = new SplitDiskBlockObjectWriter[numPartitions];
+    partitionWriterSegments = new FileSegment[numPartitions];
+    for (int i = 0; i < numPartitions; i++) {
+      final Tuple2<TempShuffleBlockId, File> tempShuffleBlockIdPlusFile =
+              blockManager.diskBlockManager().createTempShuffleBlock();
+      final File file = tempShuffleBlockIdPlusFile._2();
+      final BlockId blockId = tempShuffleBlockIdPlusFile._1();
+      splitPatitionWriters[i] =
+              blockManager.getSplitDiskWriter(blockId, file, serInstance, fileBufferSize, writeMetrics, splitThreshold);
+    }
+    // Creating the file to write to and creating a disk writer both involve interacting with
+    // the disk, and can take a long time in aggregate when we open many files, so should be
+    // included in the shuffle write time.
+    writeMetrics.incWriteTime(System.nanoTime() - openStartTime);
+
+    while (records.hasNext()) {
+      final Product2<K, V> record = records.next();
+      final K key = record._1();
+      splitPatitionWriters[partitioner.getPartition(key)].write(key, record._2());
+    }
+
+    // an array to check the splitSize and file Size
+    long [] fileSize = new long[numPartitions];
+    for (int i = 0; i < numPartitions; i++) {
+      final SplitDiskBlockObjectWriter writer = splitPatitionWriters[i];
+      FileSegment fileSegment = writer.commitAndGet();
+      partitionWriterSegments[i] = fileSegment;
+      long[] splitLengths = writer.getSplitLengthsArray();
+      ArrayList<Long> tempList = new ArrayList<>(splitLengths.length + 1);
+      for (Long l: splitLengths) {
+        tempList.add(l);
+        fileSize[i] += l;
+      }
+      if (splitLengths.length ==0 || fileSegment.length() > 0) {
+        tempList.add(fileSegment.length());
+        fileSize[i] += fileSegment.length();
+      }
+      splitPartitionLengths[i] = JavaConverters.asScalaBufferConverter(tempList).asScala().toList();
+      writer.close();
+    }
+
+    File output = shuffleBlockResolver.getDataFile(shuffleId, mapId);
+    File tmp = Utils.tempFileWith(output);
+    try {
+      long[] fileLengths = writePartitionedFile(tmp);
+      // TODO: remove this when we ensure don't need check it
+      for (int i = 0; i < numPartitions; i ++) {
+        if (fileLengths[i] != fileSize[i]) {
+          logger.error("Error in bypassSplitShuffle the sum of splitSize is not equail the fileLength in partition {}", i);
+          // fallback to unsplit
+          for (int j = 0; j < numPartitions; j++) {
+            ArrayList<Long> tempList = new ArrayList<>(1);
+            tempList.add(fileLengths[j]);
+            splitPartitionLengths[j] = JavaConverters.asScalaBufferConverter(tempList).asScala().toList();
+          }
+          break;
+        }
+      }
+      shuffleBlockResolver.writeSplitIndexFileAndCommit(shuffleId, mapId, splitPartitionLengths, tmp);
+    } finally {
+      if (tmp.exists() && !tmp.delete()) {
+        logger.error("Error while deleting temp file {}", tmp.getAbsolutePath());
+      }
+    }
+    mapStatus = MapStatus$.MODULE$.apply(blockManager.shuffleServerId(), splitPartitionLengths);
+  }
+
   @VisibleForTesting
   long[] getPartitionLengths() {
     return partitionLengths;
@@ -183,7 +285,7 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
   private long[] writePartitionedFile(File outputFile) throws IOException {
     // Track location of the partition starts in the output file
     final long[] lengths = new long[numPartitions];
-    if (partitionWriters == null) {
+    if ((isSplitShuffle && splitPatitionWriters == null) || (!isSplitShuffle && partitionWriters == null)) {
       // We were passed an empty iterator
       return lengths;
     }
@@ -214,6 +316,7 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
       writeMetrics.incWriteTime(System.nanoTime() - writeStartTime);
     }
     partitionWriters = null;
+    splitPatitionWriters = null;
     return lengths;
   }
 
@@ -241,6 +344,18 @@ final class BypassMergeSortShuffleWriter<K, V> extends ShuffleWriter<K, V> {
             }
           } finally {
             partitionWriters = null;
+          }
+        } else if (splitPatitionWriters != null) {
+          try {
+            for (SplitDiskBlockObjectWriter writer : splitPatitionWriters) {
+              // This method explicitly does _not_ throw exceptions:
+              File file = writer.revertPartialWritesAndClose();
+              if (!file.delete()) {
+                logger.error("Error while deleting file {}", file.getAbsolutePath());
+              }
+            }
+          } finally {
+            splitPatitionWriters = null;
           }
         }
         return None$.empty();

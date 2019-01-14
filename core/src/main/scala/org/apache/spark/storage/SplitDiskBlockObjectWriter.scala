@@ -296,6 +296,9 @@ private[spark] class SplitDiskBlockObjectWriter(
 
   def getSplitLengths(): ListBuffer[Long] = splitLengths.clone()
 
+  // for the invoke in java code
+  def getSplitLengthsArray(): Array[Long] = splitLengths.toArray
+
   def setSplitLengths(): Unit = {
     splitLengths.clear()
   }
