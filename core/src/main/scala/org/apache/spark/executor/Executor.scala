@@ -453,6 +453,12 @@ private[spark] class Executor(
         val directResult = new DirectTaskResult(valueBytes, accumUpdates)
         val serializedDirectResult = ser.serialize(directResult)
         val resultSize = serializedDirectResult.limit()
+        // for debug
+        val valueSize = if (value.isInstanceOf[AnyRef]) {
+          SizeEstimator.estimate(value.asInstanceOf[AnyRef])
+        } else {
+          -1
+        }
 
         // directSend = sending directly back to the driver
         val serializedResult: ByteBuffer = {
@@ -469,9 +475,13 @@ private[spark] class Executor(
               StorageLevel.MEMORY_AND_DISK_SER)
             logInfo(
               s"Finished $taskName (TID $taskId). $resultSize bytes result sent via BlockManager)")
+            logInfo(s"wangfeifei Debug the size after seriaizer is $resultSize "+
+              s"the size in memory estimate is $valueSize")
             ser.serialize(new IndirectTaskResult[Any](blockId, resultSize))
           } else {
             logInfo(s"Finished $taskName (TID $taskId). $resultSize bytes result sent to driver")
+            logInfo(s"wangfeifei Debug the size after seriaizer is $resultSize "+
+            s"the size in memory estimate is $valueSize")
             serializedDirectResult
           }
         }
