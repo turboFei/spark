@@ -75,9 +75,13 @@ public class SplitShuffleIndexInformation {
    * Get index offset for a particular reducer.
    */
   public ShuffleIndexRecord getIndex(int reduceId, int splitId) {
+    int splitNum = offsets[reduceId].capacity()/8;
+    if (splitId >= splitNum) {
+      return  new ShuffleIndexRecord(offsets[reduceId].get(splitNum -1 ), 0);
+    }
     long offset = offsets[reduceId].get(splitId);
-    long nextOffset = splitLengths[reduceId] - 1 > splitId
-            ? offsets[reduceId].get(splitId + 1) : offsets[reduceId + 1].get(0);
+    long nextOffset = splitId == splitNum - 1  ? offsets[reduceId + 1].get(0)
+            : offsets[reduceId].get(splitId + 1);
     return new ShuffleIndexRecord(offset, nextOffset - offset);
   }
 }

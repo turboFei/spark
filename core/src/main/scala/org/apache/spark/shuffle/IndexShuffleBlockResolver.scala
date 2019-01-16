@@ -406,18 +406,25 @@ private[spark] class IndexShuffleBlockResolver(
       }
       val splitNum = nextOffset - offset
       val splitId = splitBlockId.splId
-      if (splitId >= splitNum || splitId < 0) {
-        throw new Exception(s"NESPARK-160: Incorrect splitId: splitId is $splitId" +
-        s" and should between 0 and $splitNum")
+      if (splitId >= splitNum) {
+        channel.position((offset + splitNum - 1) * 8L)
+        val splitOffset = in.readLong()
+        new FileSegmentManagedBuffer(
+          transportConf,
+          getDataFile(blockId.shuffleId, blockId.mapId),
+          splitOffset,
+          0
+        )
+      } else {
+        channel.position((offset + splitId) * 8L)
+        val splitOffset = in.readLong()
+        val nextSplitOffset = in.readLong()
+        new FileSegmentManagedBuffer(
+          transportConf,
+          getDataFile(blockId.shuffleId, blockId.mapId),
+          splitOffset,
+          nextSplitOffset - splitOffset)
       }
-      channel.position((offset + splitId) * 8L)
-      val splitOffset = in.readLong()
-      val nextSplitOffset = in.readLong()
-      new FileSegmentManagedBuffer(
-        transportConf,
-        getDataFile(blockId.shuffleId, blockId.mapId),
-        splitOffset,
-        nextSplitOffset - splitOffset)
     } finally {
       in.close()
     }

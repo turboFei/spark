@@ -47,7 +47,7 @@ private[spark] sealed trait MapStatus {
 
   def getSizeForBlock(reduceId: Int, splitId: Int): Long
 
-  def getSplitNumForBlock(reduceId: Int): Int
+  def getSplitNumForBlock(reduceId: Int): Long
 
   def isSplitMapStatues: Boolean =
     isInstanceOf[SplitCompressedMapStatus] || isInstanceOf[SplitHighlyCompressedMapStatus]
@@ -131,7 +131,7 @@ private[spark] class CompressedMapStatus(
     getSizeForBlock(reduceId)
   }
 
-  override def getSplitNumForBlock(reduceId: Int): Int = 1
+  override def getSplitNumForBlock(reduceId: Int): Long = 1l
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)
@@ -190,7 +190,7 @@ private[spark] class HighlyCompressedMapStatus private (
     getSizeForBlock(reduceId)
   }
 
-  override def getSplitNumForBlock(reduceId: Int): Int = 1
+  override def getSplitNumForBlock(reduceId: Int): Long = 1l
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)
@@ -294,7 +294,7 @@ private[spark] class SplitCompressedMapStatus(
     MapStatus.decompressSize(compressedSizes(reduceId).apply(splitId))
   }
 
-  override def getSplitNumForBlock(reduceId: Int): Int = compressedSizes(reduceId).length
+  override def getSplitNumForBlock(reduceId: Int): Long = compressedSizes(reduceId).length
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)
@@ -340,7 +340,7 @@ private[spark] class SplitHighlyCompressedMapStatus private (
     private[this] var emptyBlocks: RoaringBitmap,
     private[this] var avgSize: Long,
     private var hugeBlockSizes: Map[ReduceSplitId, Byte],
-    private[this] var splitNums: Array[Int])
+    private[this] var splitNums: Array[Byte])
   extends MapStatus with Externalizable {
 
   // loc could be null when the default constructor is called during deserialization
@@ -353,7 +353,13 @@ private[spark] class SplitHighlyCompressedMapStatus private (
 
   override def getSizeForBlock(reduceId: Int): Long = {
     val splitNum = getSplitNumForBlock(reduceId)
-    (0 until splitNum).map(getSizeForBlock(reduceId, _)).sum
+    var i = 0
+    var size = 0l
+    while (i < splitNum) {
+      size += getSizeForBlock(reduceId, i)
+      i += 1
+    }
+    size
   }
 
   override def getSizeForBlock(reduceId: Int, splitId: Int): Long = {
@@ -368,7 +374,8 @@ private[spark] class SplitHighlyCompressedMapStatus private (
     }
   }
 
-  override def getSplitNumForBlock(reduceId: Int): Int = splitNums(reduceId)
+  override def getSplitNumForBlock(reduceId: Int): Long =
+    MapStatus.decompressSize(splitNums(reduceId))
 
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
@@ -377,9 +384,7 @@ private[spark] class SplitHighlyCompressedMapStatus private (
     out.writeLong(avgSize)
     // write split num arr
     out.writeInt(splitNums.length)
-    splitNums.foreach { num =>
-      out.writeInt(num)
-    }
+    out.write(splitNums)
     out.writeInt(hugeBlockSizes.size)
     hugeBlockSizes.foreach { kv =>
       out.writeInt(kv._1.reduceId)
@@ -394,13 +399,8 @@ private[spark] class SplitHighlyCompressedMapStatus private (
     emptyBlocks.readExternal(in)
     avgSize = in.readLong()
     val reduceNum = in.readInt()
-    splitNums = new Array[Int](reduceNum)
-    var i = 0
-    while (i < reduceNum) {
-      val num = in.readInt()
-      splitNums(i) = num
-      i += 1
-    }
+    splitNums = new Array[Byte](reduceNum)
+    in.readFully(splitNums)
     val count = in.readInt()
     val hugeBlockSizesArray = mutable.ArrayBuffer[Tuple2[ReduceSplitId, Byte]]()
     (0 until count).foreach { _ =>
@@ -431,12 +431,12 @@ private[spark] object SplitHighlyCompressedMapStatus {
       .map(_.conf.get(config.SHUFFLE_ACCURATE_BLOCK_THRESHOLD))
       .getOrElse(config.SHUFFLE_ACCURATE_BLOCK_THRESHOLD.defaultValue.get)
     val hugeBlockSizesArray = ArrayBuffer[Tuple2[ReduceSplitId, Byte]]()
-    val splitNumArray = new Array[Int](totalNumBlocks)
+    val splitNumArray = new Array[Byte](totalNumBlocks)
     while (i < totalNumBlocks) {
       var j = 0
       val splitSizes = uncompressedSizes(i)
       val splitNum = splitSizes.length
-      splitNumArray(i) = splitNum
+      splitNumArray(i) = MapStatus.compressSize(splitNum)
       while (j < splitNum) {
         val size = splitSizes.apply(j)
         if (size > 0) {
