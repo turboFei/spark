@@ -131,7 +131,7 @@ private[spark] class CompressedMapStatus(
     getSizeForBlock(reduceId)
   }
 
-  override def getSplitNumForBlock(reduceId: Int): Long = 1l
+  override def getSplitNumForBlock(reduceId: Int): Long = 1L
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)
@@ -190,7 +190,7 @@ private[spark] class HighlyCompressedMapStatus private (
     getSizeForBlock(reduceId)
   }
 
-  override def getSplitNumForBlock(reduceId: Int): Long = 1l
+  override def getSplitNumForBlock(reduceId: Int): Long = 1L
 
   override def writeExternal(out: ObjectOutput): Unit = Utils.tryOrIOException {
     loc.writeExternal(out)
@@ -354,7 +354,7 @@ private[spark] class SplitHighlyCompressedMapStatus private (
   override def getSizeForBlock(reduceId: Int): Long = {
     val splitNum = getSplitNumForBlock(reduceId)
     var i = 0
-    var size = 0l
+    var size = 0L
     while (i < splitNum) {
       size += getSizeForBlock(reduceId, i)
       i += 1
