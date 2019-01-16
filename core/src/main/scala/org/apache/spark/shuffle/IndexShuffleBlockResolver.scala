@@ -133,11 +133,11 @@ private[spark] class IndexShuffleBlockResolver(
   private def checkSplitIndexAndDataFile(index: File, data: File, blocks: Int):
   Array[List[Long]] = {
     // the index file should have `block + 1` longs as offset.
-    if (index.length() < ((blocks + 1) * 2 + 1) * 8L) {
+    if (index.length() < 4 + (blocks + 1) * (4 + 8)) {
       return null
     }
     val lengths = new Array[List[Long]](blocks)
-    val splitLengths = new Array[Long](blocks)
+    val splitLengths = new Array[Int](blocks)
     // Read the lengths of blocks
     val in = try {
       new DataInputStream(new NioBufferedFileInputStream(index))
@@ -146,16 +146,16 @@ private[spark] class IndexShuffleBlockResolver(
         return null
     }
     try {
-      val reduceNum = in.readLong()
+      val reduceNum = in.readInt()
       // if blocks not equal the head int in indexFile
       if (reduceNum != blocks) {
         return null
       }
       // Convert the offsets into lengths of each block
-      var splitOffset = in.readLong()
+      var splitOffset = in.readInt()
       var i = 0
       while (i < blocks) {
-        val off = in.readLong()
+        val off = in.readInt()
         splitLengths(i) = off - splitOffset
         splitOffset = off
         i += 1
@@ -213,15 +213,15 @@ private[spark] class IndexShuffleBlockResolver(
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
       Utils.tryWithSafeFinally {
         // write the reduceNums for read from indexFile
-        out.writeLong(lengths.length)
+        out.writeInt(lengths.length)
         //  each reduceId point to split lengths offset, first level index
-        var lengthsOffset = lengths.length + 2
+        var lengthsOffset = 0
         var offset = 0L
         for (splitLengths <- lengths) {
-          out.writeLong(lengthsOffset)
+          out.writeInt(lengthsOffset)
           lengthsOffset += splitLengths.length
         }
-        out.writeLong(lengthsOffset)
+        out.writeInt(lengthsOffset)
         // then each split length, secondary level index
         for (splitLengths <- lengths) {
           for (splitLength <- splitLengths) {
@@ -389,17 +389,17 @@ private[spark] class IndexShuffleBlockResolver(
     val in = new DataInputStream(Channels.newInputStream(channel))
     try {
       // the head int in indexfile is reduceNum
-      val reduceNum = in.readLong()
+      val reduceNum = in.readInt()
       val reduceId = blockId.reduceId
       if (blockId.reduceId >= reduceNum) {
         throw new Exception(s"NESPARK-160: Incorrect reduceId: " +
         s"reduceId $reduceId is bigger than reduceNum $reduceNum")
       }
-      channel.position((reduceId + 1) * 8L)
-      val offset = in.readLong()
-      val nextOffset = in.readLong()
+      channel.position((reduceId + 1) * 4L)
+      val offset = in.readInt()
+      val nextOffset = in.readInt()
       val actualPosition = channel.position()
-      val expectedPosition = (reduceId + 1) * 8L + 16
+      val expectedPosition = (reduceId + 1) * 4L + 8
       if (actualPosition != expectedPosition) {
         throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
           s"expected $expectedPosition but actual position was $actualPosition.")
@@ -407,7 +407,7 @@ private[spark] class IndexShuffleBlockResolver(
       val splitNum = nextOffset - offset
       val splitId = splitBlockId.splId
       if (splitId >= splitNum) {
-        channel.position((offset + splitNum - 1) * 8L)
+        channel.position((reduceNum + 2) * 4L + (splitNum - 1) * 8L)
         val splitOffset = in.readLong()
         new FileSegmentManagedBuffer(
           transportConf,
@@ -416,7 +416,7 @@ private[spark] class IndexShuffleBlockResolver(
           0
         )
       } else {
-        channel.position((offset + splitId) * 8L)
+        channel.position((reduceNum + 2) * 4L + (splitId) * 8L)
         val splitOffset = in.readLong()
         val nextSplitOffset = in.readLong()
         new FileSegmentManagedBuffer(

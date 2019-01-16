@@ -39,14 +39,14 @@ public class SplitShuffleIndexInformation {
     DataInputStream dis = null;
     try {
       dis = new DataInputStream(Files.newInputStream(indexFile.toPath()));
-      int reduceNum = (int)dis.readLong();
+      int reduceNum = dis.readInt();
       offsets = new LongBuffer[reduceNum + 1];
       // the last store the total length
       splitLengths = new int[reduceNum + 1];
-      long offset = dis.readLong();
+      int offset = dis.readInt();
       for (int i = 0; i < reduceNum; i ++) {
-        long nextOffset = dis.readLong();
-        splitLengths[i] = (int)(nextOffset - offset);
+        int nextOffset = dis.readInt();
+        splitLengths[i] = nextOffset - offset;
         offset = nextOffset;
       }
       // the last length is 1
@@ -75,7 +75,7 @@ public class SplitShuffleIndexInformation {
    * Get index offset for a particular reducer.
    */
   public ShuffleIndexRecord getIndex(int reduceId, int splitId) {
-    int splitNum = offsets[reduceId].capacity()/8;
+    int splitNum = offsets[reduceId].capacity() / 8;
     if (splitId >= splitNum) {
       return  new ShuffleIndexRecord(offsets[reduceId].get(splitNum -1 ), 0);
     }
