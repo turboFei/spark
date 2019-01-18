@@ -415,7 +415,7 @@ private[netty] class NettyRpcEnv(
       }
     }
 
-    override def onComplete(streamId: String, md5Hex: String): Unit = {
+    override def onComplete(streamId: String): Unit = {
       sink.close()
     }
 

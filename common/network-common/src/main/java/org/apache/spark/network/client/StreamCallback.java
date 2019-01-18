@@ -33,11 +33,11 @@ public interface StreamCallback {
   void onData(String streamId, ByteBuffer buf) throws IOException;
 
   /** Called when all data from the stream has been received. */
-  default void onComplete(String streamId) throws IOException {
-    onComplete(streamId, "");
-  }
+  void onComplete(String streamId) throws IOException;
 
-  void onComplete(String streamId, String md5Hex) throws IOException;
+  default void onComplete(String streamId, String md5Hex) throws IOException {
+    onComplete(streamId);
+  }
 
   /** Called if there's an error reading data from the stream. */
   void onFailure(String streamId, Throwable cause) throws IOException;

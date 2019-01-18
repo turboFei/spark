@@ -133,7 +133,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
     ManagedBuffer buf;
     // make md5 for check chunk
-    String md5Hex;
+    String md5Hex = "";
     try {
       streamManager.checkAuthorization(reverseClient, req.streamChunkId.streamId);
       streamManager.registerChannel(channel, req.streamChunkId.streamId);
@@ -142,10 +142,8 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
         buf.retain();
         md5Hex = DigestUtils.md5Hex(buf.createInputStream());
       } catch (Exception e) {
-        logger.error(String.format("Error make md5Hex for block %s in request from %s",
-          req.streamChunkId, getRemoteAddress(channel)), e);
-        respond(new ChunkFetchFailure(req.streamChunkId, Throwables.getStackTraceAsString(e)));
-        return;
+        logger.info(String.format("Error make md5Hex for block %s in request from %s",
+          req.streamChunkId, getRemoteAddress(channel)));
       } finally {
         buf.release();
       }

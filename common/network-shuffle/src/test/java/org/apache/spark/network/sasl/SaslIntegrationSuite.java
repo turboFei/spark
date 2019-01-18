@@ -233,7 +233,7 @@ public class SaslIntegrationSuite {
       CountDownLatch chunkReceivedLatch = new CountDownLatch(1);
       ChunkReceivedCallback callback = new ChunkReceivedCallback() {
         @Override
-        public void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5hex) {
+        public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
           chunkReceivedLatch.countDown();
         }
         @Override

@@ -254,7 +254,7 @@ public class RequestTimeoutIntegrationSuite {
     }
 
     @Override
-    public void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5hex) {
+    public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
       try {
         successLength = buffer.nioByteBuffer().remaining();
       } catch (IOException e) {

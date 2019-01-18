@@ -153,7 +153,7 @@ public class ChunkFetchIntegrationSuite {
 
     ChunkReceivedCallback callback = new ChunkReceivedCallback() {
       @Override
-      public void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5Hex) {
+      public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
         buffer.retain();
         res.successChunks.add(chunkIndex);
         res.buffers.add(buffer);

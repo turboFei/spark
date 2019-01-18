@@ -33,7 +33,8 @@ public final class StreamResponse extends AbstractResponseMessage {
   public final String streamId;
   public final long byteCount;
   public final String md5Hex;
-  public final int MD5_HEX_LENGHT = 32;
+  public final static String nullMd5Hex = "wangfeiabcdefghijklmnopqrstuvwxy";
+  public final static int MD5_HEX_LENGHT = 32;
 
   public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer, String md5Hex) {
     super(buffer, false);
@@ -43,11 +44,9 @@ public final class StreamResponse extends AbstractResponseMessage {
   }
 
   public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer) {
-    super(buffer, false);
-    this.streamId = streamId;
-    this.byteCount = byteCount;
-    this.md5Hex = "";
+    this(streamId, byteCount, buffer, nullMd5Hex);
   }
+
   @Override
   public Type type() { return Type.StreamResponse; }
 
@@ -72,7 +71,7 @@ public final class StreamResponse extends AbstractResponseMessage {
   public static StreamResponse decode(ByteBuf buf) {
     String streamId = Encoders.Strings.decode(buf);
     long byteCount = buf.readLong();
-    byte[] tempBytes = new byte[32];
+    byte[] tempBytes = new byte[MD5_HEX_LENGHT];
     buf.readBytes(tempBytes);
     return new StreamResponse(streamId, byteCount, null, new String(tempBytes));
   }

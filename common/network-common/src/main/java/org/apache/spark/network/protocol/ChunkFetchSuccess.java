@@ -33,7 +33,8 @@ import org.apache.spark.network.buffer.NettyManagedBuffer;
 public final class ChunkFetchSuccess extends AbstractResponseMessage {
   public final StreamChunkId streamChunkId;
   public final String md5Hex;
-  public final int MD5_HEX_LENGHT = 32;
+  public final static String nullMd5Hex = "wangfeiabcdefghijklmnopqrstuvwxy";
+  public final static int MD5_HEX_LENGHT = 32;
 
   public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, String md5Hex) {
     super(buffer, true);
@@ -42,7 +43,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
   }
 
   public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer) {
-    this(streamChunkId, buffer, "");
+    this(streamChunkId, buffer, nullMd5Hex);
   }
 
   @Override
@@ -56,7 +57,11 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
   @Override
   public void encode(ByteBuf buf) {
-    buf.writeBytes(md5Hex.getBytes());
+    if (md5Hex.length() != 32) {
+      buf.writeBytes(nullMd5Hex.getBytes());
+    } else {
+      buf.writeBytes(md5Hex.getBytes());
+    }
     streamChunkId.encode(buf);
   }
 
@@ -67,7 +72,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
 
   /** Decoding uses the given ByteBuf as our data, and will retain() it. */
   public static ChunkFetchSuccess decode(ByteBuf buf) {
-    byte[] tempByte = new byte[32];
+    byte[] tempByte = new byte[MD5_HEX_LENGHT];
     buf.readBytes(tempByte);
     String md5Hex = new String(tempByte);
     StreamChunkId streamChunkId = StreamChunkId.decode(buf);
