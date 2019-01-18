@@ -55,4 +55,8 @@ public class DigestUtils {
         }
         return out;
     }
+
+    public static String encodeHex(byte[] data) {
+        return  new String(encodeHex(data, DIGITS_LOWER));
+    }
 }

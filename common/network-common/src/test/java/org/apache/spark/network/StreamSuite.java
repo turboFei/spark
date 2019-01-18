@@ -327,7 +327,7 @@ public class StreamSuite {
     }
 
     @Override
-    public void onComplete(String streamId) throws IOException {
+    public void onComplete(String streamId, String md5Hex) throws IOException {
       out.close();
       synchronized (this) {
         completed = true;
