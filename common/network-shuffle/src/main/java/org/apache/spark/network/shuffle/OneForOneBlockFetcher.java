@@ -188,22 +188,29 @@ public class OneForOneBlockFetcher {
 
     @Override
     public void onData(String streamId, ByteBuffer buf) throws IOException {
-      while (buf.hasRemaining()) {
-        byte[] tempBytes = new byte[Math.min(buf.remaining(), 1024)];
-        buf.get(tempBytes);
-        md5Digest.update(tempBytes);
-        channel.write(ByteBuffer.wrap(tempBytes));
+      byte[] bytes = new byte[1024];
+      while (buf.remaining() > 1024) {
+        buf.get(bytes);
+        md5Digest.update(bytes);
+        channel.write(ByteBuffer.wrap(bytes));
       }
+      byte[] last = new byte[buf.remaining()];
+      buf.get(last);
+      md5Digest.update(last);
+      channel.write(ByteBuffer.wrap(last));
     }
 
     @Override
     public void onComplete(String streamId, String md5hex) throws IOException {
-      if (DigestUtils.encodeHex(md5Digest.digest()).equals(md5hex)) {
+      String checkMd5 = DigestUtils.encodeHex(md5Digest.digest());
+      if (checkMd5.equals(md5hex)) {
         listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead());
         if (!downloadFileManager.registerTempFileToClean(targetFile)) {
           targetFile.delete();
         }
       } else {
+        logger.error(String.format("wangfei debug: the md5Hex is not equal %s with origin %s",
+               checkMd5, md5hex));
         onFailure(streamId, new StreamCorruptedException("The received stream's md5Hex" +
           "is not equal to origin"));
       }
