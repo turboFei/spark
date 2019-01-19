@@ -106,11 +106,13 @@ public class OneForOneBlockFetcher {
             // On receipt of a chunk, pass it upwards as a block.
             listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer);
           } else {
+            logger.error(String.format("wangfei debug: the md5Hex is not equal %s with origin %s",
+                    checkMd5, md5Hex));
             onFailure(chunkIndex, new ChunkFetchFailureException("The received chunk's md5Hex is " +
                     "not equal origin md5Hex"));
           }
         } catch (Exception e) {
-          logger.info(String.format("Error occur when check md5 for %s", chunkIndex));
+          logger.info(String.format("wangfei Error occur when check md5 for %s", chunkIndex));
         } finally {
           buffer.release();
         }
@@ -214,7 +216,7 @@ public class OneForOneBlockFetcher {
         buf.get(bytes);
         md5Digest.update(bytes);
       } catch (Exception e) {
-        logger.info(String.format("warn occur during make md5 %s", bytes.length));
+        logger.info(String.format("wangfei warn occur during make md5 %s", bytes.length));
       }
       channel.write(ByteBuffer.wrap(bytes));
     }

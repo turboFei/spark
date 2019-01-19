@@ -142,7 +142,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
         buf.retain();
         md5Hex = DigestUtils.md5Hex(buf.createInputStream());
       } catch (Exception e) {
-        logger.info(String.format("Error make md5Hex for block %s in request from %s",
+        logger.info(String.format("wangfei Error make md5Hex for block %s in request from %s",
           req.streamChunkId, getRemoteAddress(channel)));
       } finally {
         buf.release();
@@ -153,7 +153,10 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
       respond(new ChunkFetchFailure(req.streamChunkId, Throwables.getStackTraceAsString(e)));
       return;
     }
-
+    if (md5Hex.length() != 32) {
+      logger.info(String.format("wangfei the md5hex maked in streamResponse is not coreect %s"
+              , md5Hex.length()));
+    }
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
     respond(new ChunkFetchSuccess(req.streamChunkId, buf, md5Hex)).addListener(future -> {
       streamManager.chunkSent(req.streamChunkId.streamId);
@@ -180,7 +183,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
       buf = streamManager.openStream(req.streamId);
     } catch (Exception e) {
       logger.error(String.format(
-        "Error opening stream %s for request from %s", req.streamId, getRemoteAddress(channel)), e);
+        "wangfei Error opening stream %s for request from %s", req.streamId, getRemoteAddress(channel)), e);
       respond(new StreamFailure(req.streamId, Throwables.getStackTraceAsString(e)));
       return;
     }
@@ -190,7 +193,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
         buf.retain();
         md5Hex = DigestUtils.md5Hex(buf.createInputStream());
       } catch (Exception e) {
-        logger.error(String.format("Error make md5Hex for block %s in request from %s",
+        logger.error(String.format("wangfei Error make md5Hex for block %s in request from %s",
                 req.streamId, getRemoteAddress(channel)), e);
         respond(new StreamFailure(req.streamId, Throwables.getStackTraceAsString(e)));
         return;
@@ -198,6 +201,10 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
         buf.release();
       }
       streamManager.streamBeingSent(req.streamId);
+      if (md5Hex.length() != 32) {
+        logger.info(String.format("wangfei the md5hex maked in streamResponse is not coreect %s"
+                , md5Hex.length()));
+      }
       respond(new StreamResponse(req.streamId, buf.size(), buf, md5Hex)).addListener(future -> {
         streamManager.streamSent(req.streamId);
       });
