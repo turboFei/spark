@@ -140,7 +140,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
       buf = streamManager.getChunk(req.streamChunkId.streamId, req.streamChunkId.chunkIndex);
       try{
         buf.retain();
-        md5Hex = DigestUtils.md5Hex(buf.createInputStream());
+        md5Hex = DigestUtils.md5Hex(buf.createDuplicateInputStream());
       } catch (Exception e) {
         logger.info(String.format("wangfei Error make md5Hex for block %s in request from %s",
           req.streamChunkId, getRemoteAddress(channel)));
@@ -191,7 +191,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     if (buf != null) {
       try{
         buf.retain();
-        md5Hex = DigestUtils.md5Hex(buf.createInputStream());
+        md5Hex = DigestUtils.md5Hex(buf.createDuplicateInputStream());
       } catch (Exception e) {
         logger.error(String.format("wangfei Error make md5Hex for block %s in request from %s",
                 req.streamId, getRemoteAddress(channel)), e);
