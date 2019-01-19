@@ -56,6 +56,10 @@ public abstract class ManagedBuffer {
    */
   public abstract InputStream createInputStream() throws IOException;
 
+  public InputStream createDuplicateInputStream() throws IOException {
+    return createInputStream();
+  }
+
   /**
    * Increment the reference count by one if applicable.
    */

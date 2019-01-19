@@ -101,7 +101,7 @@ public class OneForOneBlockFetcher {
         String checkMd5;
         try {
           buffer.retain();
-          checkMd5 = DigestUtils.md5Hex(buffer.createInputStream());
+          checkMd5 = DigestUtils.md5Hex(buffer.createDuplicateInputStream());
           if (md5Hex.equals(checkMd5)) {
             // On receipt of a chunk, pass it upwards as a block.
             listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer);

@@ -51,6 +51,11 @@ public class NettyManagedBuffer extends ManagedBuffer {
   }
 
   @Override
+  public InputStream createDuplicateInputStream() throws IOException {
+    return new ByteBufInputStream(buf.duplicate());
+  }
+
+  @Override
   public ManagedBuffer retain() {
     buf.retain();
     return this;
