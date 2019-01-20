@@ -46,7 +46,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
   public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, String md5Hex) {
     super(buffer, true);
     this.streamChunkId = streamChunkId;
-    this.md5Flag = 1;
+    this.md5Flag = md5Hex.length() == 0 ? (byte)0 : (byte)1;
     this.md5Hex = md5Hex;
   }
 

@@ -47,7 +47,7 @@ public final class StreamResponse extends AbstractResponseMessage {
     super(buffer, false);
     this.streamId = streamId;
     this.byteCount = byteCount;
-    this.md5Flag = 1;
+    this.md5Flag = md5Hex.length() == 0 ? (byte)0 : (byte)1;
     this.md5Hex = md5Hex;
   }
 
