@@ -39,14 +39,13 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
   private final long offset;
   private final long length;
   private final String md5Hex;
-  private final String  nullMd5Hex = "wangfeiabcdefghijklmnopqrstuvwxy";
 
   public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length) {
     this.conf = conf;
     this.file = file;
     this.offset = offset;
     this.length = length;
-    this.md5Hex = nullMd5Hex;
+    this.md5Hex = "";
   }
 
   public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, String md5Hex) {
