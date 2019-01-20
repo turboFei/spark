@@ -33,7 +33,6 @@ public class NettyManagedBuffer extends ManagedBuffer {
 
   public NettyManagedBuffer(ByteBuf buf) {
     this.buf = buf;
-    buf.markReaderIndex();
   }
 
   @Override
@@ -48,7 +47,6 @@ public class NettyManagedBuffer extends ManagedBuffer {
 
   @Override
   public InputStream createInputStream() throws IOException {
-    buf.resetReaderIndex();
     return new ByteBufInputStream(buf);
   }
 

@@ -431,28 +431,6 @@ final class ShuffleBlockFetcherIterator(
             reqsInFlight -= 1
             logDebug("Number of requests in flight " + reqsInFlight)
           }
-          // check md5
-          if (md5Hex.length == 32) {
-            val checkMd5 = try {
-              DigestUtils.md5Hex(buf.createInputStream())
-            } catch {
-              // The exception could only be throwed by local shuffle block
-              case e: IOException =>
-                assert(buf.isInstanceOf[FileSegmentManagedBuffer])
-                logError("Failed to create input stream from local block", e)
-                buf.release()
-                throwFetchFailedException(blockId, address, e)
-              case e: Exception =>
-                logError("NESPARK-160: error to check md5", e)
-                buf.release()
-            }
-
-            if (!checkMd5.equals(md5Hex)) {
-              val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkMd5 of " +
-                s"$blockId is not equal with orgin $md5Hex")
-              throwFetchFailedException(blockId, address, e)
-            }
-          }
 
           val in = try {
             buf.createInputStream()
@@ -465,6 +443,25 @@ final class ShuffleBlockFetcherIterator(
               throwFetchFailedException(blockId, address, e)
           }
 
+          // check md5
+          if (md5Hex.length == 32) {
+            val checkMd5 = try {
+              DigestUtils.md5Hex(in)
+            } catch {
+              case e: IOException =>
+                logError("NESPARK-160: error to check md5", e)
+                buf.release()
+            }
+
+            if (!checkMd5.equals(md5Hex)) {
+              val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkMd5 of " +
+                s"$blockId is not equal with orgin $md5Hex")
+              throwFetchFailedException(blockId, address, e)
+            }
+          }
+
+          // reset the inputStream
+          in.reset()
           input = streamWrapper(blockId, in)
           // Only copy the stream if it's wrapped by compression or encryption, also the size of
           // block is small (the decompressed block is smaller than maxBytesInFlight)

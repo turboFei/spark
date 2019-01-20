@@ -30,11 +30,9 @@ import io.netty.buffer.Unpooled;
  */
 public class NioManagedBuffer extends ManagedBuffer {
   private final ByteBuffer buf;
-  private final int position;
 
   public NioManagedBuffer(ByteBuffer buf) {
     this.buf = buf;
-    this.position = buf.position();
   }
 
   @Override
@@ -49,9 +47,6 @@ public class NioManagedBuffer extends ManagedBuffer {
 
   @Override
   public InputStream createInputStream() throws IOException {
-    // to make the same inputStream in every invoke
-    buf.rewind();
-    buf.position(position);
     return new ByteBufInputStream(Unpooled.wrappedBuffer(buf));
   }
 
