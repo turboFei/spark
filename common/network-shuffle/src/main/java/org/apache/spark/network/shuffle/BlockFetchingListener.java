@@ -29,6 +29,11 @@ public interface BlockFetchingListener extends EventListener {
    */
   void onBlockFetchSuccess(String blockId, ManagedBuffer data);
 
+  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, String md5hex) {
+    onBlockFetchSuccess(blockId, data);
+  }
+
+
   /**
    * Called at least once per block upon failures.
    */

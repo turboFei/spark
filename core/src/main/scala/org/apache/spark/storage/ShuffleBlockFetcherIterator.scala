@@ -17,20 +17,20 @@
 
 package org.apache.spark.storage
 
-import java.io.{InputStream, IOException}
+import java.io.{IOException, InputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
+
 import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
-
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle._
-import org.apache.spark.network.util.TransportConf
-import org.apache.spark.shuffle.FetchFailedException
+import org.apache.spark.network.util.{DigestUtils, TransportConf}
+import org.apache.spark.shuffle.{CheckMd5FailedException, FetchFailedException}
 import org.apache.spark.util.Utils
 import org.apache.spark.util.io.ChunkedByteBufferOutputStream
 
@@ -193,7 +193,7 @@ final class ShuffleBlockFetcherIterator(
     while (iter.hasNext) {
       val result = iter.next()
       result match {
-        case SuccessFetchResult(_, address, _, buf, _) =>
+        case SuccessFetchResult(_, address, _, buf, _, _) =>
           if (address != blockManager.blockManagerId) {
             shuffleMetrics.incRemoteBytesRead(buf.size)
             if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
@@ -241,6 +241,26 @@ final class ShuffleBlockFetcherIterator(
         }
         logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
       }
+
+      override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer,
+        md5Hex: String): Unit = {
+        // Only add the buffer to results queue if the iterator is not zombie,
+        // i.e. cleanup() has not been called yet.
+        ShuffleBlockFetcherIterator.this.synchronized {
+          if (!isZombie) {
+            // Increment the ref count because we need to pass this to a different thread.
+            // This needs to be released after use.
+            buf.retain()
+            remainingBlocks -= blockId
+            results.put(new SuccessFetchResult(BlockId(blockId), address, sizeMap(blockId), buf,
+              remainingBlocks.isEmpty, md5Hex))
+            logDebug("remainingBlocks: " + remainingBlocks)
+          }
+        }
+        logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
+      }
+
+
 
       override def onBlockFetchFailure(blockId: String, e: Throwable): Unit = {
         logError(s"Failed to get block(s) from ${req.address.host}:${req.address.port}", e)
@@ -395,7 +415,7 @@ final class ShuffleBlockFetcherIterator(
       shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
       result match {
-        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone) =>
+        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone, md5Hex) =>
           if (address != blockManager.blockManagerId) {
             numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
             shuffleMetrics.incRemoteBytesRead(buf.size)
@@ -410,6 +430,26 @@ final class ShuffleBlockFetcherIterator(
           if (isNetworkReqDone) {
             reqsInFlight -= 1
             logDebug("Number of requests in flight " + reqsInFlight)
+          }
+          // check md5
+          val checkMd5 = try {
+            DigestUtils.md5Hex(buf.createInputStream())
+          } catch {
+            // The exception could only be throwed by local shuffle block
+            case e: IOException =>
+              assert(buf.isInstanceOf[FileSegmentManagedBuffer])
+              logError("Failed to create input stream from local block", e)
+              buf.release()
+              throwFetchFailedException(blockId, address, e)
+            case e: Exception =>
+            logError("NESPARK-160: error to check md5", e)
+            buf.release()
+          }
+
+          if (!checkMd5.equals(md5Hex)) {
+            val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkMd5 of " +
+              s"$blockId is not equal with orgin $md5Hex")
+            throwFetchFailedException(blockId, address, e)
           }
 
           val in = try {
@@ -602,7 +642,8 @@ object ShuffleBlockFetcherIterator {
       address: BlockManagerId,
       size: Long,
       buf: ManagedBuffer,
-      isNetworkReqDone: Boolean) extends FetchResult {
+      isNetworkReqDone: Boolean,
+      md5Hex: String = "") extends FetchResult {
     require(buf != null)
     require(size >= 0)
   }

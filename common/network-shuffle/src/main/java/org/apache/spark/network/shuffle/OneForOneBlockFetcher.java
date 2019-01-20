@@ -93,6 +93,12 @@ public class OneForOneBlockFetcher {
     }
 
     @Override
+    public void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5Hex) {
+      // On receipt of a chunk, pass it upwards as a block.
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer, md5Hex);
+    }
+
+    @Override
     public void onFailure(int chunkIndex, Throwable e) {
       // On receipt of a failure, fail every block from chunkIndex onwards.
       String[] remainingBlockIds = Arrays.copyOfRange(blockIds, chunkIndex, blockIds.length);
@@ -174,6 +180,14 @@ public class OneForOneBlockFetcher {
     @Override
     public void onComplete(String streamId) throws IOException {
       listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead());
+      if (!downloadFileManager.registerTempFileToClean(targetFile)) {
+        targetFile.delete();
+      }
+    }
+
+    @Override
+    public void onComplete(String streamId, String md5Hex) throws IOException {
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead(), md5Hex);
       if (!downloadFileManager.registerTempFileToClean(targetFile)) {
         targetFile.delete();
       }

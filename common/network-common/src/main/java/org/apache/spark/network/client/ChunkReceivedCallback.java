@@ -36,6 +36,10 @@ public interface ChunkReceivedCallback {
    */
   void onSuccess(int chunkIndex, ManagedBuffer buffer);
 
+  default void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5Hex) {
+    onSuccess(chunkIndex, buffer);
+  };
+
   /**
    * Called upon failure to fetch a particular chunk. Note that this may actually be called due
    * to failure to fetch a prior chunk in this stream.

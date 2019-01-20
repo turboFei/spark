@@ -32,11 +32,23 @@ import org.apache.spark.network.buffer.ManagedBuffer;
 public final class StreamResponse extends AbstractResponseMessage {
   public final String streamId;
   public final long byteCount;
+  public final String md5Hex;
+  public final byte md5Flag;
 
   public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer) {
     super(buffer, false);
     this.streamId = streamId;
     this.byteCount = byteCount;
+    this.md5Flag = 0;
+    this.md5Hex = "";
+  }
+
+  public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer, String md5Hex) {
+    super(buffer, false);
+    this.streamId = streamId;
+    this.byteCount = byteCount;
+    this.md5Flag = 1;
+    this.md5Hex = md5Hex;
   }
 
   @Override
@@ -44,7 +56,7 @@ public final class StreamResponse extends AbstractResponseMessage {
 
   @Override
   public int encodedLength() {
-    return 8 + Encoders.Strings.encodedLength(streamId);
+    return 8 + Encoders.Strings.encodedLength(streamId) + 1 + md5Hex.length();
   }
 
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
@@ -52,6 +64,8 @@ public final class StreamResponse extends AbstractResponseMessage {
   public void encode(ByteBuf buf) {
     Encoders.Strings.encode(buf, streamId);
     buf.writeLong(byteCount);
+    buf.writeByte(md5Flag);
+    buf.writeBytes(md5Hex.getBytes());
   }
 
   @Override
@@ -62,19 +76,27 @@ public final class StreamResponse extends AbstractResponseMessage {
   public static StreamResponse decode(ByteBuf buf) {
     String streamId = Encoders.Strings.decode(buf);
     long byteCount = buf.readLong();
-    return new StreamResponse(streamId, byteCount, null);
+    byte md5Flag = buf.readByte();
+    String md5Hex = "";
+    if (md5Flag == 1) {
+      byte[] readBytes = new byte[32];
+      buf.readBytes(readBytes);
+      md5Hex = new String(readBytes);
+    }
+    return new StreamResponse(streamId, byteCount, null, md5Hex);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(byteCount, streamId, body());
+    return Objects.hashCode(byteCount, streamId, body(), md5Hex);
   }
 
   @Override
   public boolean equals(Object other) {
     if (other instanceof StreamResponse) {
       StreamResponse o = (StreamResponse) other;
-      return byteCount == o.byteCount && streamId.equals(o.streamId);
+      return byteCount == o.byteCount && streamId.equals(o.streamId)
+              && md5Hex.equals(o.md5Hex);
     }
     return false;
   }
@@ -84,6 +106,8 @@ public final class StreamResponse extends AbstractResponseMessage {
     return Objects.toStringHelper(this)
       .add("streamId", streamId)
       .add("byteCount", byteCount)
+      .add("md5Flag", md5Flag)
+      .add("md5Hex", md5Hex)
       .add("body", body())
       .toString();
   }

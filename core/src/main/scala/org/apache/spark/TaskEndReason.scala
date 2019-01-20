@@ -93,6 +93,21 @@ case class FetchFailed(
       s"message=\n$message\n)"
   }
 
+ @DeveloperApi
+ case class Md5CheckFailed(
+     bmAddress: BlockManagerId,  // Note that bmAddress can be null
+     shuffleId: Int,
+     mapId: Int,
+     reduceId: Int,
+     originMd5: String,
+     checkMd5: String)
+  extends TaskFailedReason {
+   override def toErrorString: String = {
+     val bmAddressString = if (bmAddress == null) "null" else bmAddress.toString
+     s"FetchFailed($bmAddressString, shuffleId=$shuffleId, mapId=$mapId, reduceId=$reduceId, " +
+       s"\n originMd5=$originMd5, checkMd5=$checkMd5)"
+ }
+
   /**
    * Fetch failures lead to a different failure handling path: (1) we don't abort the stage after
    * 4 task failures, instead we immediately go back to the stage which generated the map output,
