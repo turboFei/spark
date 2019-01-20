@@ -50,7 +50,6 @@ private[spark] class IndexShuffleBlockResolver(
   extends ShuffleBlockResolver
   with Logging {
 
-
   private lazy val blockManager = Option(_blockManager).getOrElse(SparkEnv.get.blockManager)
 
   private val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")

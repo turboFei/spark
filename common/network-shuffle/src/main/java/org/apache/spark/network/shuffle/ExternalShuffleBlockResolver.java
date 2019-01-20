@@ -38,7 +38,6 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.Weigher;
 import com.google.common.collect.Maps;
-import com.google.common.io.ByteStreams;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
 import org.slf4j.Logger;
