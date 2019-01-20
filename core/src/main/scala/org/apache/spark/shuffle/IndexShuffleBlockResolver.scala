@@ -22,6 +22,7 @@ import java.nio.channels.Channels
 import java.nio.file.Files
 
 import com.google.common.io.ByteStreams
+
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
@@ -31,8 +32,6 @@ import org.apache.spark.network.util.{DigestUtils, LimitedInputStream}
 import org.apache.spark.shuffle.IndexShuffleBlockResolver.NOOP_REDUCE_ID
 import org.apache.spark.storage._
 import org.apache.spark.util.Utils
-
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 
 /**
  * Create and maintain the shuffle blocks' mapping between logic block and physical file location.

@@ -70,6 +70,6 @@ private[spark] class MetadataFetchFailedException(
   extends FetchFailedException(null, shuffleId, -1, reduceId, message)
 
 private[spark] case  class CheckMd5FailedException(
-    message:String,
+    message: String,
     cause: Throwable = null)
   extends Exception(message, cause)

@@ -17,14 +17,14 @@
 
 package org.apache.spark.storage
 
-import java.io.{IOException, InputStream}
+import java.io.{InputStream, IOException}
 import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
-
 import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
+
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
@@ -432,24 +432,26 @@ final class ShuffleBlockFetcherIterator(
             logDebug("Number of requests in flight " + reqsInFlight)
           }
           // check md5
-          val checkMd5 = try {
-            DigestUtils.md5Hex(buf.createInputStream())
-          } catch {
-            // The exception could only be throwed by local shuffle block
-            case e: IOException =>
-              assert(buf.isInstanceOf[FileSegmentManagedBuffer])
-              logError("Failed to create input stream from local block", e)
-              buf.release()
-              throwFetchFailedException(blockId, address, e)
-            case e: Exception =>
-            logError("NESPARK-160: error to check md5", e)
-            buf.release()
-          }
+          if (md5Hex.length == 32) {
+            val checkMd5 = try {
+              DigestUtils.md5Hex(buf.createInputStream())
+            } catch {
+              // The exception could only be throwed by local shuffle block
+              case e: IOException =>
+                assert(buf.isInstanceOf[FileSegmentManagedBuffer])
+                logError("Failed to create input stream from local block", e)
+                buf.release()
+                throwFetchFailedException(blockId, address, e)
+              case e: Exception =>
+                logError("NESPARK-160: error to check md5", e)
+                buf.release()
+            }
 
-          if (!checkMd5.equals(md5Hex)) {
-            val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkMd5 of " +
-              s"$blockId is not equal with orgin $md5Hex")
-            throwFetchFailedException(blockId, address, e)
+            if (!checkMd5.equals(md5Hex)) {
+              val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkMd5 of " +
+                s"$blockId is not equal with orgin $md5Hex")
+              throwFetchFailedException(blockId, address, e)
+            }
           }
 
           val in = try {
