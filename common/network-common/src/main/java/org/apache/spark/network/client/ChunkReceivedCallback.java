@@ -34,10 +34,6 @@ public interface ChunkReceivedCallback {
    * call returns. You must therefore either retain() the buffer or copy its contents before
    * returning.
    */
-  default void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5hex) {
-    onSuccess(chunkIndex, buffer);
-  }
-
   void onSuccess(int chunkIndex, ManagedBuffer buffer);
 
   /**

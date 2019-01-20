@@ -47,12 +47,8 @@ public class NettyManagedBuffer extends ManagedBuffer {
 
   @Override
   public InputStream createInputStream() throws IOException {
+    buf.readerIndex(0);
     return new ByteBufInputStream(buf);
-  }
-
-  @Override
-  public InputStream createDuplicateInputStream() throws IOException {
-    return new ByteBufInputStream(buf.duplicate());
   }
 
   @Override

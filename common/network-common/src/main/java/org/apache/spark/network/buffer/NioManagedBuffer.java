@@ -47,12 +47,9 @@ public class NioManagedBuffer extends ManagedBuffer {
 
   @Override
   public InputStream createInputStream() throws IOException {
+    // to make the same inputStream in every invoke
+    buf.rewind();
     return new ByteBufInputStream(Unpooled.wrappedBuffer(buf));
-  }
-
-  @Override
-  public InputStream createDuplicateInputStream() throws IOException {
-    return new ByteBufInputStream(Unpooled.wrappedBuffer(buf.duplicate()));
   }
 
   @Override

@@ -22,8 +22,6 @@ import java.nio.channels.ClosedChannelException;
 
 import io.netty.buffer.ByteBuf;
 
-import org.apache.spark.network.protocol.ChunkFetchSuccess;
-import org.apache.spark.network.protocol.StreamResponse;
 import org.apache.spark.network.util.TransportFrameDecoder;
 
 /**
@@ -37,30 +35,18 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
   private final long byteCount;
   private final StreamCallback callback;
   private long bytesRead;
-  private String md5Hex;
 
   StreamInterceptor(
       TransportResponseHandler handler,
       String streamId,
       long byteCount,
-      StreamCallback callback,
-      String md5Hex) {
+      StreamCallback callback) {
     this.handler = handler;
     this.streamId = streamId;
     this.byteCount = byteCount;
     this.callback = callback;
     this.bytesRead = 0;
-    this.md5Hex = md5Hex;
   }
-
-  StreamInterceptor(
-          TransportResponseHandler handler,
-          String streamId,
-          long byteCount,
-          StreamCallback callback) {
-    this(handler, streamId, byteCount, callback, StreamResponse.nullMd5Hex);
-  }
-
 
   @Override
   public void exceptionCaught(Throwable cause) throws Exception {
@@ -90,7 +76,7 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
       throw re;
     } else if (bytesRead == byteCount) {
       handler.deactivateStream();
-      callback.onComplete(streamId, md5Hex);
+      callback.onComplete(streamId);
     }
 
     return bytesRead != byteCount;

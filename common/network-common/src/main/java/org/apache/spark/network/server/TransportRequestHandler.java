@@ -42,7 +42,6 @@ import org.apache.spark.network.protocol.RpcResponse;
 import org.apache.spark.network.protocol.StreamFailure;
 import org.apache.spark.network.protocol.StreamRequest;
 import org.apache.spark.network.protocol.StreamResponse;
-import org.apache.spark.network.util.DigestUtils;
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 /**
@@ -132,33 +131,19 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
       return;
     }
     ManagedBuffer buf;
-    // make md5 for check chunk
-    String md5Hex = "";
     try {
       streamManager.checkAuthorization(reverseClient, req.streamChunkId.streamId);
       streamManager.registerChannel(channel, req.streamChunkId.streamId);
       buf = streamManager.getChunk(req.streamChunkId.streamId, req.streamChunkId.chunkIndex);
-      try{
-        buf.retain();
-        md5Hex = DigestUtils.md5Hex(buf.createDuplicateInputStream());
-      } catch (Exception e) {
-        logger.info(String.format("wangfei Error make md5Hex for block %s in request from %s",
-          req.streamChunkId, getRemoteAddress(channel)));
-      } finally {
-        buf.release();
-      }
     } catch (Exception e) {
       logger.error(String.format("Error opening block %s for request from %s",
         req.streamChunkId, getRemoteAddress(channel)), e);
       respond(new ChunkFetchFailure(req.streamChunkId, Throwables.getStackTraceAsString(e)));
       return;
     }
-    if (md5Hex.length() != 32) {
-      logger.info(String.format("wangfei the md5hex maked in streamResponse is not coreect %s"
-              , md5Hex.length()));
-    }
+
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
-    respond(new ChunkFetchSuccess(req.streamChunkId, buf, md5Hex)).addListener(future -> {
+    respond(new ChunkFetchSuccess(req.streamChunkId, buf)).addListener(future -> {
       streamManager.chunkSent(req.streamChunkId.streamId);
     });
   }
@@ -177,35 +162,18 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
       return;
     }
     ManagedBuffer buf;
-    // md5hex
-    String md5Hex;
     try {
       buf = streamManager.openStream(req.streamId);
     } catch (Exception e) {
       logger.error(String.format(
-        "wangfei Error opening stream %s for request from %s", req.streamId, getRemoteAddress(channel)), e);
+        "Error opening stream %s for request from %s", req.streamId, getRemoteAddress(channel)), e);
       respond(new StreamFailure(req.streamId, Throwables.getStackTraceAsString(e)));
       return;
     }
 
     if (buf != null) {
-      try{
-        buf.retain();
-        md5Hex = DigestUtils.md5Hex(buf.createDuplicateInputStream());
-      } catch (Exception e) {
-        logger.error(String.format("wangfei Error make md5Hex for block %s in request from %s",
-                req.streamId, getRemoteAddress(channel)), e);
-        respond(new StreamFailure(req.streamId, Throwables.getStackTraceAsString(e)));
-        return;
-      } finally {
-        buf.release();
-      }
       streamManager.streamBeingSent(req.streamId);
-      if (md5Hex.length() != 32) {
-        logger.info(String.format("wangfei the md5hex maked in streamResponse is not coreect %s"
-                , md5Hex.length()));
-      }
-      respond(new StreamResponse(req.streamId, buf.size(), buf, md5Hex)).addListener(future -> {
+      respond(new StreamResponse(req.streamId, buf.size(), buf)).addListener(future -> {
         streamManager.streamSent(req.streamId);
       });
     } else {

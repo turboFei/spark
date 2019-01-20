@@ -18,18 +18,13 @@
 package org.apache.spark.network.shuffle;
 
 import java.io.IOException;
-import java.io.StreamCorruptedException;
 import java.nio.ByteBuffer;
-import java.security.MessageDigest;
 import java.util.Arrays;
 
-import org.apache.spark.network.protocol.ChunkFetchSuccess;
-import org.apache.spark.network.protocol.StreamResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
-import org.apache.spark.network.client.ChunkFetchFailureException;
 import org.apache.spark.network.client.ChunkReceivedCallback;
 import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.StreamCallback;
@@ -38,7 +33,6 @@ import org.apache.spark.network.server.OneForOneStreamManager;
 import org.apache.spark.network.shuffle.protocol.BlockTransferMessage;
 import org.apache.spark.network.shuffle.protocol.OpenBlocks;
 import org.apache.spark.network.shuffle.protocol.StreamHandle;
-import org.apache.spark.network.util.DigestUtils;
 import org.apache.spark.network.util.TransportConf;
 
 /**
@@ -93,35 +87,9 @@ public class OneForOneBlockFetcher {
   /** Callback invoked on receipt of each chunk. We equate a single chunk to a single block. */
   private class ChunkCallback implements ChunkReceivedCallback {
     @Override
-    public void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5Hex) {
-      if (md5Hex.equals(ChunkFetchSuccess.nullMd5Hex)) {
-        // On receipt of a chunk, pass it upwards as a block.
-        listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer);
-      } else {
-        String checkMd5;
-        try {
-          buffer.retain();
-          checkMd5 = DigestUtils.md5Hex(buffer.createDuplicateInputStream());
-          if (md5Hex.equals(checkMd5)) {
-            // On receipt of a chunk, pass it upwards as a block.
-            listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer);
-          } else {
-            logger.error(String.format("wangfei debug: the md5Hex is not equal %s with origin %s",
-                    checkMd5, md5Hex));
-            onFailure(chunkIndex, new ChunkFetchFailureException("The received chunk's md5Hex is " +
-                    "not equal origin md5Hex"));
-          }
-        } catch (Exception e) {
-          logger.info(String.format("wangfei Error occur when check md5 for %s", chunkIndex));
-        } finally {
-          buffer.release();
-        }
-      }
-
-    }
-
     public void onSuccess(int chunkIndex, ManagedBuffer buffer) {
-      onSuccess(chunkIndex, buffer, ChunkFetchSuccess.nullMd5Hex);
+      // On receipt of a chunk, pass it upwards as a block.
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer);
     }
 
     @Override
@@ -189,63 +157,25 @@ public class OneForOneBlockFetcher {
     private DownloadFileWritableChannel channel = null;
     private DownloadFile targetFile = null;
     private int chunkIndex;
-    private MessageDigest md5Digest;
 
     DownloadCallback(int chunkIndex) throws IOException {
       this.targetFile = downloadFileManager.createTempFile(transportConf);
       this.channel = targetFile.openForWriting();
       this.chunkIndex = chunkIndex;
-      this.md5Digest = DigestUtils.getMd5Digest();
     }
 
     @Override
     public void onData(String streamId, ByteBuffer buf) throws IOException {
-      byte[] bytes = new byte[1024];
       while (buf.hasRemaining()) {
-        if (buf.remaining() >= 1024) {
-          makeMd5Hex(bytes, buf);
-        } else {
-          byte[] last = new byte[buf.remaining()];
-          makeMd5Hex(last, buf);
-        }
+        channel.write(buf);
       }
-    }
-
-    private void makeMd5Hex(byte[] bytes, ByteBuffer buf) throws IOException {
-      try {
-        buf.get(bytes);
-        md5Digest.update(bytes);
-      } catch (Exception e) {
-        logger.info(String.format("wangfei warn occur during make md5 %s", bytes.length));
-      }
-      channel.write(ByteBuffer.wrap(bytes));
     }
 
     @Override
     public void onComplete(String streamId) throws IOException {
-      onComplete(streamId, StreamResponse.nullMd5Hex);
-    }
-
-    @Override
-    public void onComplete(String streamId, String md5hex) throws IOException {
-      if (md5hex.equals(StreamResponse.nullMd5Hex)) {
-        listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead());
-        if (!downloadFileManager.registerTempFileToClean(targetFile)) {
-          targetFile.delete();
-        }
-      } else {
-        String checkMd5 = DigestUtils.encodeHex(md5Digest.digest());
-        if (checkMd5.equals(md5hex)) {
-          listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead());
-          if (!downloadFileManager.registerTempFileToClean(targetFile)) {
-            targetFile.delete();
-          }
-        } else {
-          logger.error(String.format("wangfei debug: the md5Hex is not equal %s with origin %s",
-                  checkMd5, md5hex));
-          onFailure(streamId, new StreamCorruptedException("The received stream's md5Hex" +
-                  "is not equal to origin"));
-        }
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead());
+      if (!downloadFileManager.registerTempFileToClean(targetFile)) {
+        targetFile.delete();
       }
     }
 
