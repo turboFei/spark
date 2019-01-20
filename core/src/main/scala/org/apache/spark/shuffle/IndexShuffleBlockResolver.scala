@@ -254,7 +254,6 @@ private[spark] class IndexShuffleBlockResolver(
       Utils.tryWithSafeFinally {
         // We take in lengths of each block, need to convert it to offsets.
         var offset = 0L
-        out.writeLong(offset)
         for (i <- (0 until lengths.length)) {
           val length = lengths(i)
           if (length == 0) {
