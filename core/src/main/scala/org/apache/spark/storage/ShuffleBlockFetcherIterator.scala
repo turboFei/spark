@@ -432,7 +432,7 @@ final class ShuffleBlockFetcherIterator(
             logDebug("Number of requests in flight " + reqsInFlight)
           }
 
-          val in = try {
+          var in = try {
             buf.createInputStream()
           } catch {
             // The exception could only be throwed by local shuffle block
@@ -460,8 +460,12 @@ final class ShuffleBlockFetcherIterator(
             }
           }
 
-          // reset the inputStream
-          in.reset()
+          // reset the inputStream, for the unSupported inputStream, recreate it
+          if (in.markSupported()) {
+            in.reset()
+          } else {
+            in = buf.createInputStream()
+          }
           input = streamWrapper(blockId, in)
           // Only copy the stream if it's wrapped by compression or encryption, also the size of
           // block is small (the decompressed block is smaller than maxBytesInFlight)
