@@ -17,11 +17,7 @@
 
 package org.apache.spark.network.buffer;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
+import java.io.*;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
@@ -42,12 +38,27 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
   private final File file;
   private final long offset;
   private final long length;
+  private final String md5Hex;
+  private final String  nullMd5Hex = "wangfeiabcdefghijklmnopqrstuvwxy";
 
   public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length) {
     this.conf = conf;
     this.file = file;
     this.offset = offset;
     this.length = length;
+    this.md5Hex = nullMd5Hex;
+  }
+
+  public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, String md5Hex) {
+    this.conf = conf;
+    this.file = file;
+    this.offset = offset;
+    this.length = length;
+    this.md5Hex = md5Hex;
+  }
+
+  public String md5Hex() {
+    return md5Hex;
   }
 
   @Override

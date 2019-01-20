@@ -50,8 +50,7 @@ private[spark] class IndexShuffleBlockResolver(
     _blockManager: BlockManager = null)
   extends ShuffleBlockResolver
   with Logging {
-  val nullMd5Hex = "wangfeiabcdefghijklmnopqrstuvwxy"
-  val md5HexLenght = 32
+
 
   private lazy val blockManager = Option(_blockManager).getOrElse(SparkEnv.get.blockManager)
 
@@ -148,7 +147,7 @@ private[spark] class IndexShuffleBlockResolver(
     }
     try {
       // Convert the offsets into lengths of each block
-      val tempBytes = new Array[Byte](md5HexLenght)
+      val tempBytes = new Array[Byte](IndexShuffleBlockResolver.md5HexLenght)
       var i = 0
       while (i < blocks) {
         in.readFully(tempBytes)
@@ -261,8 +260,8 @@ private[spark] class IndexShuffleBlockResolver(
         for (i <- (0 until lengths.length)) {
           val length = lengths(i)
           if (length == 0) {
-            out.write(nullMd5Hex.getBytes())
-            md5Arr(i) = nullMd5Hex
+            out.write(IndexShuffleBlockResolver.nullMd5Hex.getBytes())
+            md5Arr(i) = IndexShuffleBlockResolver.nullMd5Hex
           } else {
             try {
               val fileInputStream = new FileInputStream(dataFile)
@@ -313,6 +312,7 @@ private[spark] class IndexShuffleBlockResolver(
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
     val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
+    val md5File = getMd5File(blockId.shuffleId, blockId.mapId)
 
     // SPARK-22982: if this FileInputStream's position is seeked forward by another piece of code
     // which is incorrectly using our file descriptor then this code will fetch the wrong offsets
@@ -323,6 +323,9 @@ private[spark] class IndexShuffleBlockResolver(
     val channel = Files.newByteChannel(indexFile.toPath)
     channel.position(blockId.reduceId * 8L)
     val in = new DataInputStream(Channels.newInputStream(channel))
+    val md5Channel = Files.newByteChannel(md5File.toPath)
+    channel.position(blockId.reduceId * 32L)
+    val md5In = new DataInputStream(Channels.newInputStream(md5Channel))
     try {
       val offset = in.readLong()
       val nextOffset = in.readLong()
@@ -332,13 +335,23 @@ private[spark] class IndexShuffleBlockResolver(
         throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
           s"expected $expectedPosition but actual position was $actualPosition.")
       }
+      val tempBytes = new Array[Byte](IndexShuffleBlockResolver.md5HexLenght)
+      md5In.readFully(tempBytes)
+      val actualMd5Position = md5Channel.position()
+      val exceptedMd5Position = blockId.reduceId * 32L + 32
+      if (actualMd5Position != exceptedMd5Position) {
+        throw new Exception(s"NESPARK-160: Incorrect channel position after md5 file reads: " +
+          s"expected $exceptedMd5Position but actual position was $actualMd5Position.")
+      }
       new FileSegmentManagedBuffer(
         transportConf,
         getDataFile(blockId.shuffleId, blockId.mapId),
         offset,
-        nextOffset - offset)
+        nextOffset - offset,
+        new String(tempBytes))
     } finally {
       in.close()
+      md5In.close()
     }
   }
 
@@ -350,4 +363,6 @@ private[spark] object IndexShuffleBlockResolver {
   // The disk store currently expects puts to relate to a (map, reduce) pair, but in the sort
   // shuffle outputs for several reduces are glommed into a single file.
   val NOOP_REDUCE_ID = 0
+  val nullMd5Hex = "wangfeiabcdefghijklmnopqrstuvwxy"
+  val md5HexLenght = 32
 }

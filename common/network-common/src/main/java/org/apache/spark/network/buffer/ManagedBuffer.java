@@ -75,4 +75,8 @@ public abstract class ManagedBuffer {
    * the caller will be responsible for releasing this new reference.
    */
   public abstract Object convertToNetty() throws IOException;
+
+  public String md5Hex() {
+    return "";
+  }
 }
