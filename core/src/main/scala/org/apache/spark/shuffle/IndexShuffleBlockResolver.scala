@@ -321,7 +321,7 @@ private[spark] class IndexShuffleBlockResolver(
     channel.position(blockId.reduceId * 8L)
     val in = new DataInputStream(Channels.newInputStream(channel))
     val md5Channel = Files.newByteChannel(md5File.toPath)
-    channel.position(blockId.reduceId * 32L)
+    md5Channel.position(blockId.reduceId * 32L)
     val md5In = new DataInputStream(Channels.newInputStream(md5Channel))
     try {
       val offset = in.readLong()
