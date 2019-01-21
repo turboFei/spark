@@ -168,7 +168,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         resp.body().release();
       } else {
         outstandingFetches.remove(resp.streamChunkId);
-        if (resp.digestHex.equals("")) {
+        if (resp.digestHex.length() == 0) {
           listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());
         } else {
           listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body(), resp.digestHex);
@@ -229,7 +229,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
           }
         } else {
           try {
-            if (resp.digestHex.equals("")) {
+            if (resp.digestHex.length() == 0) {
               callback.onComplete(resp.streamId);
             } else {
               callback.onComplete(resp.streamId, resp.digestHex);
