@@ -224,23 +224,8 @@ final class ShuffleBlockFetcherIterator(
     val address = req.address
 
     val blockFetchingListener = new BlockFetchingListener {
-      override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
-        // Only add the buffer to results queue if the iterator is not zombie,
-        // i.e. cleanup() has not been called yet.
-        ShuffleBlockFetcherIterator.this.synchronized {
-          if (!isZombie) {
-            // Increment the ref count because we need to pass this to a different thread.
-            // This needs to be released after use.
-            buf.retain()
-            remainingBlocks -= blockId
-            results.put(new SuccessFetchResult(BlockId(blockId), address, sizeMap(blockId), buf,
-              remainingBlocks.isEmpty))
-            logDebug("remainingBlocks: " + remainingBlocks)
-          }
-        }
-        logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
-      }
 
+      // for the shuffle fetching listener, only need to implement onBlockFetchSuccess with md5
       override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer,
         md5Hex: String): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
@@ -258,8 +243,6 @@ final class ShuffleBlockFetcherIterator(
         }
         logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
       }
-
-
 
       override def onBlockFetchFailure(blockId: String, e: Throwable): Unit = {
         logError(s"Failed to get block(s) from ${req.address.host}:${req.address.port}", e)
