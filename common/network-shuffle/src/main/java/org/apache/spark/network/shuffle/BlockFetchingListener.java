@@ -25,22 +25,16 @@ public interface BlockFetchingListener extends EventListener {
   /**
    * Called once per successfully fetched block. After this call returns, data will be released
    * automatically. If the data will be passed to another thread, the receiver should retain()
-   * and release() the buffer on their own, or copy the data to a new buffer.Here provide a
-   * default method body for that each blockFetchingListener only need to implement
-   * one onBlockFetchSuccess method.
+   * and release() the buffer on their own, or copy the data to a new buffer.
    */
-  default void onBlockFetchSuccess(String blockId, ManagedBuffer data) {
-
-  }
+  void onBlockFetchSuccess(String blockId, ManagedBuffer data);
 
   /**
    * Called once per successfully fetch block during shuffle, which has a parameter present the
    * checkSum of shuffle block.Here provide a default method body for that not every
    * blockFetchingListener need to implement one onBlockFetchSuccess method.
    */
-  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, String digestHex) {
-    onBlockFetchSuccess(blockId, data);
-  }
+  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, String digestHex) {}
 
   /**
    * Called at least once per block upon failures.

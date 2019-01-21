@@ -244,6 +244,10 @@ final class ShuffleBlockFetcherIterator(
         logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
       }
 
+      override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
+        onBlockFetchSuccess(blockId, data, "")
+      }
+
       override def onBlockFetchFailure(blockId: String, e: Throwable): Unit = {
         logError(s"Failed to get block(s) from ${req.address.host}:${req.address.port}", e)
         results.put(new FailureFetchResult(BlockId(blockId), address, e))
