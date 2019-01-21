@@ -30,7 +30,7 @@ import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle._
 import org.apache.spark.network.util.{DigestUtils, TransportConf}
-import org.apache.spark.shuffle.{CheckMd5FailedException, FetchFailedException}
+import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.util.Utils
 
 /**
@@ -626,4 +626,9 @@ object ShuffleBlockFetcherIterator {
       address: BlockManagerId,
       e: Throwable)
     extends FetchResult
+
+  private[spark] case  class CheckMd5FailedException(
+      message: String,
+      cause: Throwable = null)
+    extends Exception(message, cause)
 }
