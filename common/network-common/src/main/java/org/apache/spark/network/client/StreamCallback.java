@@ -35,7 +35,7 @@ public interface StreamCallback {
   /** Called when all data from the stream has been received. */
   void onComplete(String streamId) throws IOException;
 
-  default void onComplete(String streamId, String md5Hex) throws IOException {
+  default void onComplete(String streamId, String digestHex) throws IOException {
     onComplete(streamId);
   }
 

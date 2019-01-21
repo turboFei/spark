@@ -32,22 +32,24 @@ import org.apache.spark.network.buffer.NettyManagedBuffer;
  */
 public final class ChunkFetchSuccess extends AbstractResponseMessage {
   public final StreamChunkId streamChunkId;
-  public final String md5Hex;
-  public final byte md5Flag;
+  public final String digestHex;
+  public final byte digestFlag;
+  // TODO: now is 16
+  private static final int digestHexLength = 32;
 
 
   public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer) {
     super(buffer, true);
     this.streamChunkId = streamChunkId;
-    this.md5Flag = 0;
-    this.md5Hex = "";
+    this.digestFlag = 0;
+    this.digestHex = "";
   }
 
-  public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, String md5Hex) {
+  public ChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, String digestHex) {
     super(buffer, true);
     this.streamChunkId = streamChunkId;
-    this.md5Flag = md5Hex.length() == 0 ? (byte)0 : (byte)1;
-    this.md5Hex = md5Hex;
+    this.digestFlag = digestHex.length() == 0 ? (byte)0 : (byte)1;
+    this.digestHex = digestHex;
   }
 
   @Override
@@ -55,15 +57,15 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
 
   @Override
   public int encodedLength() {
-    return streamChunkId.encodedLength() + 1 + md5Hex.length();
+    return streamChunkId.encodedLength() + 1 + digestHex.length();
   }
 
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
   @Override
   public void encode(ByteBuf buf) {
     streamChunkId.encode(buf);
-    buf.writeByte(md5Flag);
-    buf.writeBytes(md5Hex.getBytes());
+    buf.writeByte(digestFlag);
+    buf.writeBytes(digestHex.getBytes());
   }
 
   @Override
@@ -77,7 +79,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
     byte md5Falg = buf.readByte();
     String md5Hex = "";
     if (md5Falg == 1) {
-      byte[] readBytes = new byte[32];
+      byte[] readBytes = new byte[digestHexLength];
       buf.readBytes(readBytes);
       md5Hex = new String(readBytes);
     }
@@ -88,7 +90,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(streamChunkId, body(), md5Hex);
+    return Objects.hashCode(streamChunkId, body(), digestFlag, digestHex);
   }
 
   @Override
@@ -96,7 +98,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
     if (other instanceof ChunkFetchSuccess) {
       ChunkFetchSuccess o = (ChunkFetchSuccess) other;
       return streamChunkId.equals(o.streamChunkId) && super.equals(o)
-              && md5Hex.equals(o.md5Hex);
+              && digestFlag == o.digestFlag && digestHex.equals(o.digestHex);
     }
     return false;
   }
@@ -105,8 +107,8 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
   public String toString() {
     return Objects.toStringHelper(this)
       .add("streamChunkId", streamChunkId)
-      .add("md5Falg", md5Flag)
-      .add("md5Hex", md5Hex)
+      .add("md5Falg", digestFlag)
+      .add("md5Hex", digestHex)
       .add("buffer", body())
       .toString();
   }

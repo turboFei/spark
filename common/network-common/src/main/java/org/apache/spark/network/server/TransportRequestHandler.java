@@ -143,7 +143,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
 
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
-    respond(new ChunkFetchSuccess(req.streamChunkId, buf, buf.md5Hex())).addListener(future -> {
+    respond(new ChunkFetchSuccess(req.streamChunkId, buf, buf.digestHex())).addListener(future -> {
       streamManager.chunkSent(req.streamChunkId.streamId);
     });
   }
@@ -173,7 +173,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
     if (buf != null) {
       streamManager.streamBeingSent(req.streamId);
-      respond(new StreamResponse(req.streamId, buf.size(), buf, buf.md5Hex())).addListener(future -> {
+      respond(new StreamResponse(req.streamId, buf.size(), buf, buf.digestHex())).addListener(future -> {
         streamManager.streamSent(req.streamId);
       });
     } else {

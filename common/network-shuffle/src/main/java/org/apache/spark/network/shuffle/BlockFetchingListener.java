@@ -38,7 +38,7 @@ public interface BlockFetchingListener extends EventListener {
    * checkSum of shuffle block.Here provide a default method body for that not every
    * blockFetchingListener need to implement one onBlockFetchSuccess method.
    */
-  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, String md5hex) {
+  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, String digestHex) {
     onBlockFetchSuccess(blockId, data);
   }
 

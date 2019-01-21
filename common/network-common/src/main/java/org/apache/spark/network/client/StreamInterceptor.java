@@ -35,32 +35,20 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
   private final long byteCount;
   private final StreamCallback callback;
   private long bytesRead;
-  private String md5Hex;
+  private String digestHex;
 
   StreamInterceptor(
       TransportResponseHandler handler,
       String streamId,
       long byteCount,
-      StreamCallback callback) {
-    this.handler = handler;
-    this.streamId = streamId;
-    this.byteCount = byteCount;
-    this.callback = callback;
-    this.bytesRead = 0;
-    this.md5Hex = "";
-  }
-  StreamInterceptor(
-      TransportResponseHandler handler,
-      String streamId,
-      long byteCount,
       StreamCallback callback,
-      String md5Hex) {
+      String digestHex) {
     this.handler = handler;
     this.streamId = streamId;
     this.byteCount = byteCount;
     this.callback = callback;
     this.bytesRead = 0;
-    this.md5Hex = md5Hex;
+    this.digestHex = digestHex;
   }
 
   @Override
@@ -91,7 +79,7 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
       throw re;
     } else if (bytesRead == byteCount) {
       handler.deactivateStream();
-      callback.onComplete(streamId, md5Hex);
+      callback.onComplete(streamId, digestHex);
     }
 
     return bytesRead != byteCount;

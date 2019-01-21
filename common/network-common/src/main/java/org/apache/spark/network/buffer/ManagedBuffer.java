@@ -76,7 +76,7 @@ public abstract class ManagedBuffer {
    */
   public abstract Object convertToNetty() throws IOException;
 
-  public String digest() {
+  public String digestHex() {
     return "";
   }
 }

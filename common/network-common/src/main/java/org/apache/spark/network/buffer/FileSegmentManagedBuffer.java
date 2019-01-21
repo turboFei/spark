@@ -38,26 +38,26 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
   private final File file;
   private final long offset;
   private final long length;
-  private final String digest;
+  private final String digestHex;
 
   public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length) {
     this.conf = conf;
     this.file = file;
     this.offset = offset;
     this.length = length;
-    this.digest = "";
+    this.digestHex = "";
   }
 
-  public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, String digest) {
+  public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, String digestHex) {
     this.conf = conf;
     this.file = file;
     this.offset = offset;
     this.length = length;
-    this.digest = digest;
+    this.digestHex = digestHex;
   }
 
-  public String digest() {
-    return digest;
+  public String digestHex() {
+    return digestHex;
   }
 
   @Override
@@ -160,7 +160,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
       .add("file", file)
       .add("offset", offset)
       .add("length", length)
-      .add("digest", digest)
+      .add("digest", digestHex)
       .toString();
   }
 }
