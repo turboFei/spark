@@ -21,8 +21,6 @@ import java.io._
 import java.nio.channels.Channels
 import java.nio.file.Files
 
-import com.google.common.io.ByteStreams
-
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
@@ -134,13 +132,7 @@ private[spark] class IndexShuffleBlockResolver(
     }
 
     // the size of data file should match with index file and the digests should match too
-    var equal = true
-    for(i <- (0 until blocks)) {
-      if (digestArr(i) != digests(i)) {
-        equal = false
-      }
-    }
-    if (equal && data.length() == lengths.sum) {
+    if (data.length() == lengths.sum && !(0 until blocks).exists(i => digestArr(i).equals(digests(i)))) {
       (lengths, digestArr)
     } else {
       null
@@ -238,7 +230,6 @@ private[spark] class IndexShuffleBlockResolver(
       }
     }
   }
-
 
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
     // The block is actually going to be a range of a single map output file for this map, so

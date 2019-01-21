@@ -26,6 +26,7 @@ import io.netty.channel.ChannelFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.spark.network.buffer.FileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.buffer.NioManagedBuffer;
 import org.apache.spark.network.client.RpcResponseCallback;
@@ -143,7 +144,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
 
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
-    respond(new ChunkFetchSuccess(req.streamChunkId, buf, buf.digestHex())).addListener(future -> {
+    respond(new ChunkFetchSuccess(req.streamChunkId, buf, ((FileSegmentManagedBuffer)buf).digestHex())).addListener(future -> {
       streamManager.chunkSent(req.streamChunkId.streamId);
     });
   }
@@ -173,7 +174,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
     if (buf != null) {
       streamManager.streamBeingSent(req.streamId);
-      respond(new StreamResponse(req.streamId, buf.size(), buf, buf.digestHex())).addListener(future -> {
+      respond(new StreamResponse(req.streamId, buf.size(), buf, ((FileSegmentManagedBuffer)buf).digestHex())).addListener(future -> {
         streamManager.streamSent(req.streamId);
       });
     } else {

@@ -39,9 +39,6 @@ public interface StreamCallback {
     onComplete(streamId);
   }
 
-
-
-
   /** Called if there's an error reading data from the stream. */
   void onFailure(String streamId, Throwable cause) throws IOException;
 }

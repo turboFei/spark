@@ -36,7 +36,7 @@ public interface ChunkReceivedCallback {
    */
   void onSuccess(int chunkIndex, ManagedBuffer buffer);
 
-  default void onSuccess(int chunkIndex, ManagedBuffer buffer, String md5Hex) {
+  default void onSuccess(int chunkIndex, ManagedBuffer buffer, String digestHex) {
     onSuccess(chunkIndex, buffer);
   };
 

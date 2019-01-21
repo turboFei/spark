@@ -42,7 +42,6 @@ public interface BlockFetchingListener extends EventListener {
     onBlockFetchSuccess(blockId, data);
   }
 
-
   /**
    * Called at least once per block upon failures.
    */

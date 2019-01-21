@@ -227,7 +227,7 @@ final class ShuffleBlockFetcherIterator(
 
       // for the shuffle fetching listener, only need to implement onBlockFetchSuccess with md5
       override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer,
-                                       digestHex: String): Unit = {
+         digestHex: String): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
         // i.e. cleanup() has not been called yet.
         ShuffleBlockFetcherIterator.this.synchronized {
