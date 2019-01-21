@@ -112,7 +112,7 @@ abstract class BlockTransferService extends ShuffleClient with Closeable with Lo
           }
         }
         override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer,
-          md5Hex: String): Unit = {
+            digestHex: String): Unit = {
           data match {
             case f: FileSegmentManagedBuffer =>
               result.success(f)

@@ -79,7 +79,11 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
       throw re;
     } else if (bytesRead == byteCount) {
       handler.deactivateStream();
-      callback.onComplete(streamId, digestHex);
+      if (digestHex.equals("")) {
+        callback.onComplete(streamId);
+      } else {
+        callback.onComplete(streamId, digestHex);
+      }
     }
 
     return bytesRead != byteCount;

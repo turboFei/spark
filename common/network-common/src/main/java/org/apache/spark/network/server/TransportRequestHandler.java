@@ -144,9 +144,15 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
 
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
-    respond(new ChunkFetchSuccess(req.streamChunkId, buf, ((FileSegmentManagedBuffer)buf).digestHex())).addListener(future -> {
-      streamManager.chunkSent(req.streamChunkId.streamId);
-    });
+    if (buf instanceof  FileSegmentManagedBuffer) {
+      respond(new ChunkFetchSuccess(req.streamChunkId, buf, ((FileSegmentManagedBuffer) buf).digestHex())).addListener(future -> {
+        streamManager.chunkSent(req.streamChunkId.streamId);
+      });
+    } else {
+      respond(new ChunkFetchSuccess(req.streamChunkId, buf)).addListener(future -> {
+        streamManager.chunkSent(req.streamChunkId.streamId);
+      });
+    }
   }
 
   private void processStreamRequest(final StreamRequest req) {
@@ -174,9 +180,15 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
     if (buf != null) {
       streamManager.streamBeingSent(req.streamId);
-      respond(new StreamResponse(req.streamId, buf.size(), buf, ((FileSegmentManagedBuffer)buf).digestHex())).addListener(future -> {
-        streamManager.streamSent(req.streamId);
-      });
+      if (buf instanceof FileSegmentManagedBuffer) {
+        respond(new StreamResponse(req.streamId, buf.size(), buf, ((FileSegmentManagedBuffer) buf).digestHex())).addListener(future -> {
+          streamManager.streamSent(req.streamId);
+        });
+      } else {
+        respond(new StreamResponse(req.streamId, buf.size(), buf)).addListener(future -> {
+          streamManager.streamSent(req.streamId);
+        });
+      }
     } else {
       respond(new StreamFailure(req.streamId, String.format(
         "Stream '%s' was not found.", req.streamId)));
