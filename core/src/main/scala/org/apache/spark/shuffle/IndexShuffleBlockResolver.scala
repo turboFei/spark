@@ -246,14 +246,13 @@ private[spark] class IndexShuffleBlockResolver(
     mapId: Int,
     lengths: Array[Long]): Unit = {
     val md5File = getMd5File(shuffleId, mapId)
+    val dataFile = getDataFile(shuffleId, mapId)
     val md5Temp = Utils.tempFileWith(md5File)
     val md5Arr = new Array[String](lengths.length)
     try {
-      val dataFile = getDataFile(shuffleId, mapId)
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(md5Temp)))
+      val dataFileInputStream = new FileInputStream(dataFile)
       Utils.tryWithSafeFinally {
-        // We take in lengths of each block, need to convert it to offsets.
-        var offset = 0L
         for (i <- (0 until lengths.length)) {
           val length = lengths(i)
           if (length == 0) {
@@ -261,21 +260,18 @@ private[spark] class IndexShuffleBlockResolver(
             md5Arr(i) = IndexShuffleBlockResolver.nullMd5Hex
           } else {
             try {
-              val fileInputStream = new FileInputStream(dataFile)
-              ByteStreams.skipFully(fileInputStream, offset)
-              val md5 = DigestUtils.md5Hex(new LimitedInputStream(fileInputStream, length))
+              val md5 = DigestUtils.md5Hex(new LimitedInputStream(dataFileInputStream, length))
               out.write(md5.getBytes())
               md5Arr(i) = md5
-              fileInputStream.close()
             } catch {
-              case e: Exception =>
+              case e: IOException =>
                 logError(s"NESPARK-160: Exception during make md5 for dataFile $dataFile ", e)
             }
           }
-          offset += length
         }
       } {
         out.close()
+        dataFileInputStream.close()
       }
 
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
