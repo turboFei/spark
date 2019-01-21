@@ -38,6 +38,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.Weigher;
 import com.google.common.collect.Maps;
+import org.apache.spark.network.util.*;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
 import org.slf4j.Logger;
@@ -46,11 +47,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.spark.network.buffer.FileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
-import org.apache.spark.network.util.LevelDBProvider;
 import org.apache.spark.network.util.LevelDBProvider.StoreVersion;
-import org.apache.spark.network.util.JavaUtils;
-import org.apache.spark.network.util.NettyUtils;
-import org.apache.spark.network.util.TransportConf;
 
 /**
  * Manages converting shuffle BlockIds into physical segments of local files, from a process outside
@@ -251,28 +248,9 @@ public class ExternalShuffleBlockResolver {
           "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
         shuffleIndexRecord.getOffset(),
         shuffleIndexRecord.getLength(),
-        getMd5Hex(md5File, reduceId * 32L));
+        DigestUtils.encodeHex(shuffleIndexRecord.getDigest()));
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
-    }
-  }
-
-  private String getMd5Hex(File md5File, long md5FileOffset) {
-    byte[] readBytes = new byte[32];
-    try(SeekableByteChannel md5Channel = Files.newByteChannel(md5File.toPath());
-        DataInputStream md5In = new DataInputStream(Channels.newInputStream(md5Channel))) {
-      md5Channel.position(md5FileOffset);
-      md5In.readFully(readBytes);
-      long actualMd5Position = md5Channel.position();
-      long exceptedMd5Position = md5FileOffset + 32;
-      if (actualMd5Position != exceptedMd5Position) {
-        throw new Exception("NESPARK-160: Incorrect channel position after md5 file reads: " +
-                "expected $exceptedMd5Position but actual position was $actualMd5Position.");
-      }
-      return new String(readBytes);
-    } catch (Exception e) {
-      throw new RuntimeException(String.format("NESPARK-160: Failed to read md5 from %s",
-              md5File.getName()), e);
     }
   }
 

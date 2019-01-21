@@ -32,21 +32,29 @@ public class ShuffleIndexInformation {
   /** offsets as long buffer */
   private final LongBuffer offsets;
   private int size;
+  // for the digest to check shuffle block
+  private final ByteBuffer digests;
+  // the length for md5
+  private final int digestLength = 16;
 
   public ShuffleIndexInformation(File indexFile) throws IOException {
-    size = (int)indexFile.length();
-    ByteBuffer buffer = ByteBuffer.allocate(size);
+    size = (int)indexFile.length() ;
+    int numPartitions = (size - 8) / (8 + digestLength);
+    ByteBuffer buffer = ByteBuffer.allocate(numPartitions * 8 + 8);
+    digests = ByteBuffer.allocate(numPartitions * digestLength);
     offsets = buffer.asLongBuffer();
     DataInputStream dis = null;
     try {
       dis = new DataInputStream(Files.newInputStream(indexFile.toPath()));
       dis.readFully(buffer.array());
+      dis.readFully(digests.array());
     } finally {
       if (dis != null) {
         dis.close();
       }
     }
   }
+
 
   /**
    * Size of the index file
@@ -62,6 +70,9 @@ public class ShuffleIndexInformation {
   public ShuffleIndexRecord getIndex(int reduceId) {
     long offset = offsets.get(reduceId);
     long nextOffset = offsets.get(reduceId + 1);
-    return new ShuffleIndexRecord(offset, nextOffset - offset);
+    byte[] digest = new byte[digestLength];
+    digests.position(reduceId * digestLength);
+    digests.get(digest);
+    return new ShuffleIndexRecord(offset, nextOffset - offset, digest);
   }
 }

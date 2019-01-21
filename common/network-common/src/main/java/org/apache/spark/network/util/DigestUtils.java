@@ -33,6 +33,10 @@ public class DigestUtils {
         return new String (encodeHex(digest(getMd5Digest(), data), DIGITS_LOWER));
     }
 
+    public static byte[] md5(InputStream data) throws IOException {
+        return digest(getMd5Digest(), data);
+    }
+
     public static MessageDigest getMd5Digest() {
         return getDigest("MD5");
     }

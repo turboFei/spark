@@ -54,16 +54,17 @@ private[spark] class IndexShuffleBlockResolver(
 
   private val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
 
+  // The digest length for shuffle block check
+  private val digestLength = IndexShuffleBlockResolver.md5Lenght
+
+  private lazy val nullDigestBytes = new Array[Byte](digestLength).map(_ => 1.toByte)
+
   def getDataFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
 
   private def getIndexFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
-  }
-
-  private def getMd5File(shuffleId: Int, mapId: Int): File = {
-    blockManager.diskBlockManager.getFile(ShuffleMd5BlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
 
   /**
@@ -89,12 +90,14 @@ private[spark] class IndexShuffleBlockResolver(
    * Check whether the given index and data files match each other.
    * If so, return the partition lengths in the data file. Otherwise return null.
    */
-  private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
+  private def checkIndexDigestAndDataFile(index: File, data: File, blocks: Int,
+      digests: Array[String]): (Array[Long], Array[String]) = {
     // the index file should have `block + 1` longs as offset.
-    if (index.length() != (blocks + 1) * 8L) {
+    if (index.length() != blocks * (8L + digestLength) + 8L) {
       return null
     }
     val lengths = new Array[Long](blocks)
+    val digestArr = new Array[String](blocks)
     // Read the lengths of blocks
     val in = try {
       new DataInputStream(new NioBufferedFileInputStream(index))
@@ -115,41 +118,12 @@ private[spark] class IndexShuffleBlockResolver(
         offset = off
         i += 1
       }
-    } catch {
-      case e: IOException =>
-        return null
-    } finally {
-      in.close()
-    }
-
-    // the size of data file should match with index file
-    if (data.length() == lengths.sum) {
-      lengths
-    } else {
-      null
-    }
-  }
-
-  private def checkMd5AndDataFile(md5: File, md5List: Array[String], blocks: Int): Array[String] = {
-    // the index file should have `block + 1` longs as offset.
-    if (md5.length() != blocks * 32L) {
-      return null
-    }
-    val md5Arr = new Array[String](blocks)
-    // Read the lengths of blocks
-    val in = try {
-      new DataInputStream(new NioBufferedFileInputStream(md5))
-    } catch {
-      case e: IOException =>
-        return null
-    }
-    try {
-      // Convert the offsets into lengths of each block
-      val tempBytes = new Array[Byte](IndexShuffleBlockResolver.md5HexLenght)
-      var i = 0
+      // read the digests
+      val tempBytes = new Array[Byte](digestLength)
+      i = 0
       while (i < blocks) {
         in.readFully(tempBytes)
-        md5Arr(i) = new String(tempBytes)
+        digestArr(i) = DigestUtils.encodeHex(tempBytes)
         i += 1
       }
     } catch {
@@ -159,15 +133,15 @@ private[spark] class IndexShuffleBlockResolver(
       in.close()
     }
 
-    // the size of data file should match with index file
-   var equal = true
+    // the size of data file should match with index file and the digests should match too
+    var equal = true
     for(i <- (0 until blocks)) {
-      if (md5List(i) != md5Arr(i)) {
+      if (digestArr(i) != digests(i)) {
         equal = false
       }
     }
-    if (equal) {
-      md5Arr
+    if (equal && data.length() == lengths.sum) {
+      (lengths, digestArr)
     } else {
       null
     }
@@ -183,15 +157,17 @@ private[spark] class IndexShuffleBlockResolver(
    *
    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
    */
-  def writeIndexFileAndCommit(
+  def writeIndexDigestFileAndCommit(
       shuffleId: Int,
       mapId: Int,
       lengths: Array[Long],
       dataTmp: File): Unit = {
     val indexFile = getIndexFile(shuffleId, mapId)
     val indexTmp = Utils.tempFileWith(indexFile)
+    val digestArr = new Array[String](lengths.length)
     try {
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
+      val dataIn = new FileInputStream(dataTmp);
       Utils.tryWithSafeFinally {
         // We take in lengths of each block, need to convert it to offsets.
         var offset = 0L
@@ -199,6 +175,24 @@ private[spark] class IndexShuffleBlockResolver(
         for (length <- lengths) {
           offset += length
           out.writeLong(offset)
+        }
+
+        for (i <- (0 until lengths.length)) {
+          val length = lengths(i)
+          if (length == 0) {
+            out.write(nullDigestBytes)
+            digestArr(i) = DigestUtils.encodeHex(nullDigestBytes)
+          } else {
+            try {
+              // here use md5
+              val digest = DigestUtils.md5(new LimitedInputStream(dataIn, length))
+              out.write(digest)
+              digestArr(i) = DigestUtils.encodeHex(digest)
+            } catch {
+              case e: IOException =>
+                logError(s"NESPARK-160: Exception during make md5 for dataTmpFile $dataTmp ", e)
+            }
+          }
         }
       } {
         out.close()
@@ -208,11 +202,14 @@ private[spark] class IndexShuffleBlockResolver(
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
       synchronized {
-        val existingLengths = checkIndexAndDataFile(indexFile, dataFile, lengths.length)
-        if (existingLengths != null) {
+        val existingLengthsDigest = checkIndexDigestAndDataFile(indexFile, dataFile, lengths.length, digestArr)
+        if (existingLengthsDigest != null) {
           // Another attempt for the same task has already written our map outputs successfully,
           // so just use the existing partition lengths and delete our temporary map outputs.
+          val existingLengths = existingLengthsDigest._1
+          val existingDigests = existingLengthsDigest._2
           System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
+          System.arraycopy(existingDigests, 0, digestArr, 0, digestArr.length)
           if (dataTmp != null && dataTmp.exists()) {
             dataTmp.delete()
           }
@@ -241,71 +238,11 @@ private[spark] class IndexShuffleBlockResolver(
     }
   }
 
-  def writeMd5FileAndCommit(
-    shuffleId: Int,
-    mapId: Int,
-    lengths: Array[Long]): Unit = {
-    val md5File = getMd5File(shuffleId, mapId)
-    val dataFile = getDataFile(shuffleId, mapId)
-    val md5Temp = Utils.tempFileWith(md5File)
-    val md5Arr = new Array[String](lengths.length)
-    try {
-      val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(md5Temp)))
-      val dataFileInputStream = new FileInputStream(dataFile)
-      Utils.tryWithSafeFinally {
-        for (i <- (0 until lengths.length)) {
-          val length = lengths(i)
-          if (length == 0) {
-            out.write(IndexShuffleBlockResolver.nullMd5Hex.getBytes())
-            md5Arr(i) = IndexShuffleBlockResolver.nullMd5Hex
-          } else {
-            try {
-              val md5 = DigestUtils.md5Hex(new LimitedInputStream(dataFileInputStream, length))
-              out.write(md5.getBytes())
-              md5Arr(i) = md5
-            } catch {
-              case e: IOException =>
-                logError(s"NESPARK-160: Exception during make md5 for dataFile $dataFile ", e)
-            }
-          }
-        }
-      } {
-        out.close()
-        dataFileInputStream.close()
-      }
-
-      // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
-      // the following check and rename are atomic.
-      synchronized {
-        val existMd5Arr = checkMd5AndDataFile(md5File, md5Arr, lengths.length)
-        if (existMd5Arr != null) {
-          // Another attempt for the same task has already written our map outputs successfully,
-          // so just use the existing partition lengths and delete our temporary map outputs.
-          System.arraycopy(existMd5Arr, 0, md5Arr, 0, lengths.length)
-          md5Temp.delete()
-        } else {
-          // This is the first successful attempt in writing the map outputs for this task,
-          // so override any existing index and data files with the ones we wrote.
-          if (md5File.exists()) {
-            md5File.delete()
-          }
-          if (!md5Temp.renameTo(md5File)) {
-            throw new IOException("fail to rename file " + md5Temp + " to " + md5File)
-          }
-        }
-      }
-    } finally {
-      if (md5Temp.exists() && !md5Temp.delete()) {
-        logError(s"Failed to delete temporary index file at ${md5Temp.getAbsolutePath}")
-      }
-    }
-  }
 
   override def getBlockData(blockId: ShuffleBlockId): ManagedBuffer = {
     // The block is actually going to be a range of a single map output file for this map, so
     // find out the consolidated file, then the offset within that from our index
     val indexFile = getIndexFile(blockId.shuffleId, blockId.mapId)
-    val md5File = getMd5File(blockId.shuffleId, blockId.mapId)
 
     // SPARK-22982: if this FileInputStream's position is seeked forward by another piece of code
     // which is incorrectly using our file descriptor then this code will fetch the wrong offsets
@@ -316,9 +253,6 @@ private[spark] class IndexShuffleBlockResolver(
     val channel = Files.newByteChannel(indexFile.toPath)
     channel.position(blockId.reduceId * 8L)
     val in = new DataInputStream(Channels.newInputStream(channel))
-    val md5Channel = Files.newByteChannel(md5File.toPath)
-    md5Channel.position(blockId.reduceId * 32L)
-    val md5In = new DataInputStream(Channels.newInputStream(md5Channel))
     try {
       val offset = in.readLong()
       val nextOffset = in.readLong()
@@ -328,23 +262,24 @@ private[spark] class IndexShuffleBlockResolver(
         throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
           s"expected $expectedPosition but actual position was $actualPosition.")
       }
-      val tempBytes = new Array[Byte](IndexShuffleBlockResolver.md5HexLenght)
-      md5In.readFully(tempBytes)
-      val actualMd5Position = md5Channel.position()
-      val exceptedMd5Position = blockId.reduceId * 32L + 32
-      if (actualMd5Position != exceptedMd5Position) {
+      val tempDigestBytes = new Array[Byte](digestLength)
+      val reducerNum = (indexFile.length() - 8) / (8 + digestLength)
+      channel.position((reducerNum + 1) * 8L + blockId.reduceId * digestLength)
+      in.readFully(tempDigestBytes)
+      val actualDigestPosition = channel.position()
+      val exceptedDigestPosition = (reducerNum + 1) * 8L + (blockId.reduceId + 1) * digestLength
+      if (actualDigestPosition != exceptedDigestPosition) {
         throw new Exception(s"NESPARK-160: Incorrect channel position after md5 file reads: " +
-          s"expected $exceptedMd5Position but actual position was $actualMd5Position.")
+          s"expected $exceptedDigestPosition but actual position was $actualDigestPosition.")
       }
       new FileSegmentManagedBuffer(
         transportConf,
         getDataFile(blockId.shuffleId, blockId.mapId),
         offset,
         nextOffset - offset,
-        new String(tempBytes))
+        DigestUtils.encodeHex(tempDigestBytes))
     } finally {
       in.close()
-      md5In.close()
     }
   }
 
@@ -356,6 +291,5 @@ private[spark] object IndexShuffleBlockResolver {
   // The disk store currently expects puts to relate to a (map, reduce) pair, but in the sort
   // shuffle outputs for several reduces are glommed into a single file.
   val NOOP_REDUCE_ID = 0
-  val nullMd5Hex = "wangfeiabcdefghijklmnopqrstuvwxy"
-  val md5HexLenght = 32
+  val md5Lenght = 16
 }
