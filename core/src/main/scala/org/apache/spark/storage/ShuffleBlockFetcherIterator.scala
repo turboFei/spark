@@ -24,6 +24,7 @@ import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
+import scala.util.control.Breaks._
 
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.internal.Logging
@@ -416,85 +417,97 @@ final class ShuffleBlockFetcherIterator(
 
       result match {
         case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone, md5Hex) =>
-          if (address != blockManager.blockManagerId) {
-            numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
-            shuffleMetrics.incRemoteBytesRead(buf.size)
-            if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
-              shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+          breakable {
+            if (address != blockManager.blockManagerId) {
+              numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
+              shuffleMetrics.incRemoteBytesRead(buf.size)
+              if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
+                shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+              }
+              shuffleMetrics.incRemoteBlocksFetched(1)
             }
-            shuffleMetrics.incRemoteBlocksFetched(1)
-          }
-          if (!localBlocks.contains(blockId)) {
-            bytesInFlight -= size
-          }
-          if (isNetworkReqDone) {
-            reqsInFlight -= 1
-            logDebug("Number of requests in flight " + reqsInFlight)
-          }
+            if (!localBlocks.contains(blockId)) {
+              bytesInFlight -= size
+            }
+            if (isNetworkReqDone) {
+              reqsInFlight -= 1
+              logDebug("Number of requests in flight " + reqsInFlight)
+            }
 
-          var in = try {
-            buf.createInputStream()
-          } catch {
-            // The exception could only be throwed by local shuffle block
-            case e: IOException =>
-              assert(buf.isInstanceOf[FileSegmentManagedBuffer])
-              logError("Failed to create input stream from local block", e)
-              buf.release()
-              throwFetchFailedException(blockId, address, e)
-          }
-
-          // check md5
-          if (md5Hex.length == 32) {
-            val checkMd5 = try {
-              DigestUtils.md5Hex(in)
+            var in = try {
+              buf.createInputStream()
             } catch {
+              // The exception could only be throwed by local shuffle block
               case e: IOException =>
-                logError("NESPARK-160: error to check md5", e)
+                assert(buf.isInstanceOf[FileSegmentManagedBuffer])
+                logError("Failed to create input stream from local block", e)
                 buf.release()
+                throwFetchFailedException(blockId, address, e)
             }
 
-            if (!checkMd5.equals(md5Hex)) {
-              val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkMd5 of " +
-                s"$blockId is not equal with orgin $md5Hex")
-              throwFetchFailedException(blockId, address, e)
-            }
-          }
+            // check md5
+            if (md5Hex.length != 0) {
+              val checkMd5 = try {
+                DigestUtils.md5Hex(in)
+              } catch {
+                case e: IOException =>
+                  logError("NESPARK-160: error to check md5", e)
+                  buf.release()
+                  throwFetchFailedException(blockId, address, e)
+              }
 
-          // reset the inputStream, for the unSupported inputStream, recreate it
-          if (in.markSupported()) {
-            in.reset()
-          } else {
-            in = buf.createInputStream()
-          }
-          input = streamWrapper(blockId, in)
-          // Only copy the stream if it's wrapped by compression or encryption, also the size of
-          // block is small (the decompressed block is smaller than maxBytesInFlight)
-          if (detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
-            val originalInput = input
-            val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
-            try {
-              // Decompress the whole block at once to detect any corruption, which could increase
-              // the memory usage tne potential increase the chance of OOM.
-              // TODO: manage the memory used here, and spill it into disk in case of OOM.
-              Utils.copyStream(input, out)
-              out.close()
-              input = out.toChunkedByteBuffer.toInputStream(dispose = true)
-            } catch {
-              case e: IOException =>
+              if (!checkMd5.equals(md5Hex)) {
                 buf.release()
-                if (buf.isInstanceOf[FileSegmentManagedBuffer]
-                  || corruptedBlocks.contains(blockId)) {
+                val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkMd5 of " +
+                  s"$blockId is not equal with orgin $md5Hex")
+                if (!corruptedBlocks.contains(blockId)) {
                   throwFetchFailedException(blockId, address, e)
                 } else {
-                  logWarning(s"got an corrupted block $blockId from $address, fetch again", e)
+                  logError("The md5 of read data error and fetch again", e)
                   corruptedBlocks += blockId
                   fetchRequests += FetchRequest(address, Array((blockId, size)))
                   result = null
+                  break()
                 }
-            } finally {
-              // TODO: release the buf here to free memory earlier
-              originalInput.close()
-              in.close()
+              }
+              // reset the inputStream, for the unSupported inputStream, recreate it
+              if (in.markSupported()) {
+                in.reset()
+              } else {
+                in = buf.createInputStream()
+              }
+            }
+
+            input = streamWrapper(blockId, in)
+            // Only copy the stream if it's wrapped by compression or encryption, also the size of
+            // block is small (the decompressed block is smaller than maxBytesInFlight)
+            if (detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
+              val originalInput = input
+              val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
+              try {
+                // Decompress the whole block at once to detect any corruption, which could increase
+                // the memory usage tne potential increase the chance of OOM.
+                // TODO: manage the memory used here, and spill it into disk in case of OOM.
+                Utils.copyStream(input, out)
+                out.close()
+                input = out.toChunkedByteBuffer.toInputStream(dispose = true)
+              } catch {
+                case e: IOException =>
+                  buf.release()
+                  if (buf.isInstanceOf[FileSegmentManagedBuffer]
+                    || corruptedBlocks.contains(blockId)) {
+                    throwFetchFailedException(blockId, address, e)
+                  } else {
+                    logWarning(s"got an corrupted block $blockId from $address, fetch again", e)
+                    corruptedBlocks += blockId
+                    fetchRequests += FetchRequest(address, Array((blockId, size)))
+                    result = null
+                  }
+              } finally {
+                // TODO: release the buf here to free memory earlier
+                originalInput.close()
+                in.close()
+              }
             }
           }
 
