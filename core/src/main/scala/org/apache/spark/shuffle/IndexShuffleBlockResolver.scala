@@ -157,7 +157,7 @@ private[spark] class IndexShuffleBlockResolver(
    *
    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
    */
-  def writeIndexDigestFileAndCommit(
+  def writeIndexFileAndCommit(
       shuffleId: Int,
       mapId: Int,
       lengths: Array[Long],
@@ -202,7 +202,8 @@ private[spark] class IndexShuffleBlockResolver(
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
       synchronized {
-        val existingLengthsDigest = checkIndexDigestAndDataFile(indexFile, dataFile, lengths.length, digestArr)
+        val existingLengthsDigest = checkIndexDigestAndDataFile(indexFile, dataFile,
+          lengths.length, digestArr)
         if (existingLengthsDigest != null) {
           // Another attempt for the same task has already written our map outputs successfully,
           // so just use the existing partition lengths and delete our temporary map outputs.
