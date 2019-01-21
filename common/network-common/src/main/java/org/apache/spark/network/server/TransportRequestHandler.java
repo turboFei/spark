@@ -180,7 +180,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
     if (buf != null) {
       streamManager.streamBeingSent(req.streamId);
-      if (buf instanceof FileSegmentManagedBuffer) {
+      if (buf instanceof FileSegmentManagedBuffer && ((FileSegmentManagedBuffer)buf).digestHex().length() > 0) {
         respond(new StreamResponse(req.streamId, buf.size(), buf, ((FileSegmentManagedBuffer) buf).digestHex())).addListener(future -> {
           streamManager.streamSent(req.streamId);
         });
