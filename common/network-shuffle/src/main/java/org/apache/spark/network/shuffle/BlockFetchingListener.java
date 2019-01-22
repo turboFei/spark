@@ -34,7 +34,9 @@ public interface BlockFetchingListener extends EventListener {
    * checkSum of shuffle block.Here provide a default method body for that not every
    * blockFetchingListener need to implement one onBlockFetchSuccess method.
    */
-  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, byte[] digest) {}
+  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, byte[] digest) {
+    onBlockFetchSuccess(blockId, data);
+  }
 
   /**
    * Called at least once per block upon failures.
