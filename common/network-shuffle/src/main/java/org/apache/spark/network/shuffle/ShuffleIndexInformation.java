@@ -17,6 +17,8 @@
 
 package org.apache.spark.network.shuffle;
 
+import org.apache.spark.network.util.DigestUtils;
+
 import java.io.DataInputStream;
 import java.io.File;
 import java.io.IOException;
@@ -32,13 +34,12 @@ public class ShuffleIndexInformation {
   /** offsets as long buffer */
   private final LongBuffer offsets;
   private int size;
-  // for the digest to check shuffle block
   private final ByteBuffer digests;
-  // the length for md5
-  private final int digestLength = 16;
+  private final int digestLength;
 
-  public ShuffleIndexInformation(File indexFile) throws IOException {
+  public ShuffleIndexInformation(File indexFile, String digestAlgorithm) throws IOException {
     size = (int)indexFile.length() ;
+    digestLength = DigestUtils.getDigestLength(digestAlgorithm);
     int numPartitions = (size - 8) / (8 + digestLength);
     ByteBuffer buffer = ByteBuffer.allocate(numPartitions * 8 + 8);
     digests = ByteBuffer.allocate(numPartitions * digestLength);
@@ -54,7 +55,6 @@ public class ShuffleIndexInformation {
       }
     }
   }
-
 
   /**
    * Size of the index file

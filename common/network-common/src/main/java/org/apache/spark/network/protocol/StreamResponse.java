@@ -21,6 +21,7 @@ import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 
 import org.apache.spark.network.buffer.ManagedBuffer;
+import org.apache.spark.network.util.DigestUtils;
 
 /**
  * Response to {@link StreamRequest} when the stream has been successfully opened.
@@ -32,24 +33,23 @@ import org.apache.spark.network.buffer.ManagedBuffer;
 public final class StreamResponse extends AbstractResponseMessage {
   public final String streamId;
   public final long byteCount;
-  public final String digestHex;
-  public final byte digestFlag;
-  private static final int digestHexLength = 32;
+  public final byte[] digest;
+  public final int digestLength;
 
   public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer) {
     super(buffer, false);
     this.streamId = streamId;
     this.byteCount = byteCount;
-    this.digestFlag = 0;
-    this.digestHex = "";
+    this.digestLength = 0;
+    this.digest = new byte[0];
   }
 
-  public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer, String md5Hex) {
+  public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer, byte[] digest) {
     super(buffer, false);
     this.streamId = streamId;
     this.byteCount = byteCount;
-    this.digestFlag = md5Hex.length() == 0 ? (byte)0 : (byte)1;
-    this.digestHex = md5Hex;
+    this.digest = digest;
+    this.digestLength = digest.length;
   }
 
   @Override
@@ -57,7 +57,7 @@ public final class StreamResponse extends AbstractResponseMessage {
 
   @Override
   public int encodedLength() {
-    return 8 + Encoders.Strings.encodedLength(streamId) + 1 + digestHex.length();
+    return 8 + Encoders.Strings.encodedLength(streamId) + 8 + digestLength;
   }
 
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
@@ -65,8 +65,8 @@ public final class StreamResponse extends AbstractResponseMessage {
   public void encode(ByteBuf buf) {
     Encoders.Strings.encode(buf, streamId);
     buf.writeLong(byteCount);
-    buf.writeByte(digestFlag);
-    buf.writeBytes(digestHex.getBytes());
+    buf.writeInt(digestLength);
+    buf.writeBytes(digest);
   }
 
   @Override
@@ -77,19 +77,15 @@ public final class StreamResponse extends AbstractResponseMessage {
   public static StreamResponse decode(ByteBuf buf) {
     String streamId = Encoders.Strings.decode(buf);
     long byteCount = buf.readLong();
-    byte md5Flag = buf.readByte();
-    String md5Hex = "";
-    if (md5Flag == 1) {
-      byte[] readBytes = new byte[digestHexLength];
-      buf.readBytes(readBytes);
-      md5Hex = new String(readBytes);
-    }
-    return new StreamResponse(streamId, byteCount, null, md5Hex);
+    int digestLength = buf.readInt();
+    byte[] digest = new byte[digestLength];
+    buf.readBytes(digest);
+    return new StreamResponse(streamId, byteCount, null, digest);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(byteCount, streamId, body(), digestFlag, digestHex);
+    return Objects.hashCode(byteCount, streamId, body(), digestLength, digest);
   }
 
   @Override
@@ -97,7 +93,7 @@ public final class StreamResponse extends AbstractResponseMessage {
     if (other instanceof StreamResponse) {
       StreamResponse o = (StreamResponse) other;
       return byteCount == o.byteCount && streamId.equals(o.streamId)
-              && digestFlag == o.digestFlag && digestHex.equals(o.digestHex);
+              && digestLength == o.digestLength && DigestUtils.digestEqual(digest, o.digest);
     }
     return false;
   }
@@ -107,8 +103,7 @@ public final class StreamResponse extends AbstractResponseMessage {
     return Objects.toStringHelper(this)
       .add("streamId", streamId)
       .add("byteCount", byteCount)
-      .add("md5Flag", digestFlag)
-      .add("md5Hex", digestHex)
+      .add("digestLength", digestLength)
       .add("body", body())
       .toString();
   }

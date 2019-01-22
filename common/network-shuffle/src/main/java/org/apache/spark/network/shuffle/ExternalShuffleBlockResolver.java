@@ -107,10 +107,11 @@ public class ExternalShuffleBlockResolver {
     this.conf = conf;
     this.registeredExecutorFile = registeredExecutorFile;
     String indexCacheSize = conf.get("spark.shuffle.service.index.cache.size", "100m");
+    String digestAlgorithm = conf.get("spark.shuffle.digest.codec", "crc32");
     CacheLoader<File, ShuffleIndexInformation> indexCacheLoader =
         new CacheLoader<File, ShuffleIndexInformation>() {
           public ShuffleIndexInformation load(File file) throws IOException {
-            return new ShuffleIndexInformation(file);
+            return new ShuffleIndexInformation(file, digestAlgorithm);
           }
         };
     shuffleIndexCache = CacheBuilder.newBuilder()
@@ -246,7 +247,7 @@ public class ExternalShuffleBlockResolver {
           "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
         shuffleIndexRecord.getOffset(),
         shuffleIndexRecord.getLength(),
-        DigestUtils.encodeHex(shuffleIndexRecord.getDigest()));
+        shuffleIndexRecord.getDigest());
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     }

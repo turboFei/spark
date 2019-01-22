@@ -36,9 +36,7 @@ public interface ChunkReceivedCallback {
    */
   void onSuccess(int chunkIndex, ManagedBuffer buffer);
 
-  default void onSuccess(int chunkIndex, ManagedBuffer buffer, String digestHex) {
-    onSuccess(chunkIndex, buffer);
-  };
+  default void onSuccess(int chunkIndex, ManagedBuffer buffer, byte[] digest) {}
 
   /**
    * Called upon failure to fetch a particular chunk. Note that this may actually be called due
