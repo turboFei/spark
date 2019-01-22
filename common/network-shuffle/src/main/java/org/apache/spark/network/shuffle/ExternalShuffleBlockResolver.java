@@ -248,7 +248,7 @@ public class ExternalShuffleBlockResolver {
           "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
         shuffleIndexRecord.getOffset(),
         shuffleIndexRecord.getLength(),
-        DigestUtils.encodeHex(shuffleIndexRecord.getDigest()));
+        shuffleIndexRecord.getDigestHex());
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     }

@@ -92,7 +92,7 @@ public class ShuffleIndexInformation {
       byte[] digest = new byte[digestLength];
       digests.position(reduceId * digestLength);
       digests.get(digest);
-      return new ShuffleIndexRecord(offset, nextOffset - offset, digest);
+      return new ShuffleIndexRecord(offset, nextOffset - offset, DigestUtils.encodeHex(digest));
     } else {
       return new ShuffleIndexRecord(offset, nextOffset - offset);
     }
