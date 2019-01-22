@@ -31,6 +31,12 @@ public class ShuffleIndexRecord {
     this.digest = digest;
   }
 
+  public ShuffleIndexRecord(long offset, long length) {
+    this.offset = offset;
+    this.length = length;
+    this.digest = new byte[0];
+  }
+
   public long getOffset() {
     return offset;
   }

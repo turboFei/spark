@@ -106,12 +106,13 @@ public class ExternalShuffleBlockResolver {
       Executor directoryCleaner) throws IOException {
     this.conf = conf;
     this.registeredExecutorFile = registeredExecutorFile;
+    Boolean digestEnable = Boolean.getBoolean(conf.get("spark.shuffle.digest.enable", "false"));
     String indexCacheSize = conf.get("spark.shuffle.service.index.cache.size", "100m");
     String digestAlgorithm = conf.get("spark.shuffle.digest.codec", "crc32");
     CacheLoader<File, ShuffleIndexInformation> indexCacheLoader =
         new CacheLoader<File, ShuffleIndexInformation>() {
           public ShuffleIndexInformation load(File file) throws IOException {
-            return new ShuffleIndexInformation(file, digestAlgorithm);
+            return new ShuffleIndexInformation(file, digestEnable, digestAlgorithm);
           }
         };
     shuffleIndexCache = CacheBuilder.newBuilder()

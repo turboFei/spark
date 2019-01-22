@@ -37,21 +37,39 @@ public class ShuffleIndexInformation {
   private final ByteBuffer digests;
   private final int digestLength;
 
-  public ShuffleIndexInformation(File indexFile, String digestAlgorithm) throws IOException {
-    size = (int)indexFile.length() ;
-    digestLength = DigestUtils.getDigestLength(digestAlgorithm);
-    int numPartitions = (size - 8) / (8 + digestLength);
-    ByteBuffer buffer = ByteBuffer.allocate(numPartitions * 8 + 8);
-    digests = ByteBuffer.allocate(numPartitions * digestLength);
-    offsets = buffer.asLongBuffer();
-    DataInputStream dis = null;
-    try {
-      dis = new DataInputStream(Files.newInputStream(indexFile.toPath()));
-      dis.readFully(buffer.array());
-      dis.readFully(digests.array());
-    } finally {
-      if (dis != null) {
-        dis.close();
+  public ShuffleIndexInformation(File indexFile, Boolean digestEnable, String digestAlgorithm) throws IOException {
+    if (digestEnable) {
+      size = (int) indexFile.length();
+      digestLength = DigestUtils.getDigestLength(digestAlgorithm);
+      int numPartitions = (size - 8) / (8 + digestLength);
+      ByteBuffer buffer = ByteBuffer.allocate(numPartitions * 8 + 8);
+      digests = ByteBuffer.allocate(numPartitions * digestLength);
+      offsets = buffer.asLongBuffer();
+      DataInputStream dis = null;
+      try {
+        dis = new DataInputStream(Files.newInputStream(indexFile.toPath()));
+        dis.readFully(buffer.array());
+        dis.readFully(digests.array());
+      } finally {
+        if (dis != null) {
+          dis.close();
+        }
+      }
+    } else {
+      // for the compatible with previous version
+      digestLength = 0;
+      digests = null;
+      size = (int)indexFile.length();
+      ByteBuffer buffer = ByteBuffer.allocate(size);
+      offsets = buffer.asLongBuffer();
+      DataInputStream dis = null;
+      try {
+        dis = new DataInputStream(Files.newInputStream(indexFile.toPath()));
+        dis.readFully(buffer.array());
+      } finally {
+        if (dis != null) {
+          dis.close();
+        }
       }
     }
   }
@@ -70,9 +88,13 @@ public class ShuffleIndexInformation {
   public ShuffleIndexRecord getIndex(int reduceId) {
     long offset = offsets.get(reduceId);
     long nextOffset = offsets.get(reduceId + 1);
-    byte[] digest = new byte[digestLength];
-    digests.position(reduceId * digestLength);
-    digests.get(digest);
-    return new ShuffleIndexRecord(offset, nextOffset - offset, digest);
+    if (digestLength !=0 && digests != null) {
+      byte[] digest = new byte[digestLength];
+      digests.position(reduceId * digestLength);
+      digests.get(digest);
+      return new ShuffleIndexRecord(offset, nextOffset - offset, digest);
+    } else {
+      return new ShuffleIndexRecord(offset, nextOffset - offset);
+    }
   }
 }
