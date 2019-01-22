@@ -10,6 +10,7 @@ import java.util.zip.CRC32;
 public class DigestUtils {
     private static final int STREAM_BUFFER_LENGTH = 2048;
     private static final HashMap<ALGORITHM, Integer> ALOGRITHMS_LENGTH;
+    private static final char[] DIGITS_LOWWER;
 
     public enum ALGORITHM {
         CRC32, MD5
@@ -23,6 +24,8 @@ public class DigestUtils {
         ALOGRITHMS_LENGTH = new HashMap<>(2);
         ALOGRITHMS_LENGTH.put(ALGORITHM.MD5, 16);
         ALOGRITHMS_LENGTH.put(ALGORITHM.CRC32, 8);
+        DIGITS_LOWWER = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
+
     }
 
     public DigestUtils() {
@@ -116,6 +119,23 @@ public class DigestUtils {
             }
             return result == 0;
 
+    }
+
+    public static String encodeHex(byte[] data) {
+        return new String(encodeHex(data, DIGITS_LOWWER));
+    }
+
+    protected static char[] encodeHex(byte[] data, char[] toDigits) {
+        int l = data.length;
+        char[] out = new char[l << 1];
+        int i = 0;
+
+        for(int var5 = 0; i < l; ++i) {
+            out[var5++] = toDigits[(240 & data[i]) >>> 4];
+            out[var5++] = toDigits[15 & data[i]];
+        }
+
+        return out;
     }
 
 }

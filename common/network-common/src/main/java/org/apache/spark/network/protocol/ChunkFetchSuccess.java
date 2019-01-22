@@ -103,6 +103,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
     return Objects.toStringHelper(this)
       .add("streamChunkId", streamChunkId)
       .add("digestLength", digestLength)
+      .add("digest", DigestUtils.encodeHex(digest))
       .add("buffer", body())
       .toString();
   }

@@ -30,6 +30,7 @@ import com.google.common.base.Objects;
 import com.google.common.io.ByteStreams;
 import io.netty.channel.DefaultFileRegion;
 
+import org.apache.spark.network.util.DigestUtils;
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.LimitedInputStream;
 import org.apache.spark.network.util.TransportConf;
@@ -164,7 +165,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
       .add("file", file)
       .add("offset", offset)
       .add("length", length)
-      .add("digestLength", digest.length)
+      .add("digest", DigestUtils.encodeHex(digest))
       .toString();
   }
 }

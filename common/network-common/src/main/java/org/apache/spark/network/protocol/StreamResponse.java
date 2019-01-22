@@ -104,6 +104,7 @@ public final class StreamResponse extends AbstractResponseMessage {
       .add("streamId", streamId)
       .add("byteCount", byteCount)
       .add("digestLength", digestLength)
+      .add("digest", DigestUtils.encodeHex(digest))
       .add("body", body())
       .toString();
   }

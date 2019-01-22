@@ -444,8 +444,9 @@ final class ShuffleBlockFetcherIterator(
 
               if (!DigestUtils.digestEqual(checkDigest, digest)) {
                 buf.release()
-                val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest $checkDigest of " +
-                  s"$blockId is not equal with orgin $digest")
+                val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest " +
+                  s"${DigestUtils.encodeHex(checkDigest)} of " +
+                  s"$blockId is not equal with orgin ${DigestUtils.encodeHex(digest)}")
                 if (!corruptedBlocks.contains(blockId)) {
                   throwFetchFailedException(blockId, address, e)
                 } else {
