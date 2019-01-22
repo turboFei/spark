@@ -57,7 +57,7 @@ public final class StreamResponse extends AbstractResponseMessage {
 
   @Override
   public int encodedLength() {
-    return 8 + Encoders.Strings.encodedLength(streamId) + 8 + digestLength;
+    return 8 + Encoders.Strings.encodedLength(streamId) + 4 + digestLength;
   }
 
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */

@@ -56,7 +56,7 @@ public final class ChunkFetchSuccess extends AbstractResponseMessage {
 
   @Override
   public int encodedLength() {
-    return streamChunkId.encodedLength() + 8 + digestLength;
+    return streamChunkId.encodedLength() + 4 + digestLength;
   }
 
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
