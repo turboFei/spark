@@ -444,7 +444,7 @@ final class ShuffleBlockFetcherIterator(
 
               if (!DigestUtils.digestEqual(checkDigest, digest)) {
                 buf.release()
-                val e = new CheckMd5FailedException(s"NESPARK-160: the checkMd5 $checkDigest of " +
+                val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest $checkDigest of " +
                   s"$blockId is not equal with orgin $digest")
                 if (!corruptedBlocks.contains(blockId)) {
                   throwFetchFailedException(blockId, address, e)
@@ -632,7 +632,7 @@ object ShuffleBlockFetcherIterator {
       e: Throwable)
     extends FetchResult
 
-  private[spark] case  class CheckMd5FailedException(
+  private[spark] case  class CheckDigestFailedException(
       message: String,
       cause: Throwable = null)
     extends Exception(message, cause)
