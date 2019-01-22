@@ -56,8 +56,6 @@ private[spark] class IndexShuffleBlockResolver(
   private final val algorithm = conf.get("spark.shuffle.digest.codec", "crc32")
   private final val digestLength = DigestUtils.getDigestLength(algorithm)
 
-  private lazy val nullDigestBytes = new Array[Byte](digestLength).map(_ => 1.toByte)
-
   def getDataFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
@@ -174,8 +172,9 @@ private[spark] class IndexShuffleBlockResolver(
         for (i <- (0 until lengths.length)) {
           val length = lengths(i)
           if (length == 0) {
-            out.write(nullDigestBytes)
-            digestArr(i) = nullDigestBytes.clone()
+            val nullDigest = new Array[Byte](digestLength)
+            out.write(nullDigest)
+            digestArr(i) = nullDigest
           } else {
             try {
               val digest = DigestUtils.digestWithAlogrithm(algorithm,
