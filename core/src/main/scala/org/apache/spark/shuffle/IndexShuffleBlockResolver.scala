@@ -182,7 +182,7 @@ private[spark] class IndexShuffleBlockResolver(
               val digest = DigestUtils.digestWithAlogrithm(algorithm,
                 new LimitedInputStream(dataIn, length))
               out.write(digest)
-              digestArr(i) = digest.clone()
+              digestArr(i) = digest
             } catch {
               case e: IOException =>
                 logError(s"NESPARK-160: Exception during make md5 for dataTmpFile $dataTmp ", e)
