@@ -178,7 +178,6 @@ private[spark] class IndexShuffleBlockResolver(
             digestArr(i) = nullDigestBytes.clone()
           } else {
             try {
-              // here use md5
               val digest = DigestUtils.digestWithAlogrithm(algorithm,
                 new LimitedInputStream(dataIn, length))
               out.write(digest)
@@ -191,6 +190,7 @@ private[spark] class IndexShuffleBlockResolver(
         }
       } {
         out.close()
+        dataIn.close()
       }
 
       val dataFile = getDataFile(shuffleId, mapId)
