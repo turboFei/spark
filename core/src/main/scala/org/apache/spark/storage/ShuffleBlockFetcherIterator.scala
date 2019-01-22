@@ -432,7 +432,7 @@ final class ShuffleBlockFetcherIterator(
             }
 
             // detect inputStream  corrupt
-            if (detectCorrupt && digestHex.length > 0) {
+            if (detectCorrupt && digestHex!=null && digestHex.length > 0) {
               val checkDigestHex = try {
                 DigestUtils.encodeHex(DigestUtils.digestWithAlogrithm(digestAlgorithm, in))
               } catch {
