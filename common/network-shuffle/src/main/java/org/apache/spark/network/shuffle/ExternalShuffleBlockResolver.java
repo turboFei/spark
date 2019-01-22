@@ -43,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.spark.network.buffer.FileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
+import org.apache.spark.network.util.DigestUtils;
 import org.apache.spark.network.util.LevelDBProvider;
 import org.apache.spark.network.util.LevelDBProvider.StoreVersion;
 import org.apache.spark.network.util.JavaUtils;
@@ -246,7 +247,7 @@ public class ExternalShuffleBlockResolver {
           "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
         shuffleIndexRecord.getOffset(),
         shuffleIndexRecord.getLength(),
-        shuffleIndexRecord.getDigest());
+        DigestUtils.encodeHex(shuffleIndexRecord.getDigest()));
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     }

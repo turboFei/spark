@@ -93,9 +93,9 @@ public class OneForOneBlockFetcher {
     }
 
     @Override
-    public void onSuccess(int chunkIndex, ManagedBuffer buffer, byte[] digest) {
+    public void onSuccess(int chunkIndex, ManagedBuffer buffer, String digestHex) {
       // On receipt of a chunk, pass it upwards as a block.
-      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer, digest);
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer, digestHex);
     }
 
     @Override
@@ -186,8 +186,8 @@ public class OneForOneBlockFetcher {
     }
 
     @Override
-    public void onComplete(String streamId, byte[] digest) throws IOException {
-      listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead(), digest);
+    public void onComplete(String streamId, String digestHex) throws IOException {
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead(), digestHex);
       if (!downloadFileManager.registerTempFileToClean(targetFile)) {
         targetFile.delete();
       }

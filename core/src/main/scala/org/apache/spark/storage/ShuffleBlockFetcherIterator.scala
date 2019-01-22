@@ -228,7 +228,7 @@ final class ShuffleBlockFetcherIterator(
 
       // for the shuffle fetching listener, only need to implement onBlockFetchSuccess with digest
       override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer,
-          digest: Array[Byte]): Unit = {
+          digestHex: String): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
         // i.e. cleanup() has not been called yet.
         ShuffleBlockFetcherIterator.this.synchronized {
@@ -238,7 +238,7 @@ final class ShuffleBlockFetcherIterator(
             buf.retain()
             remainingBlocks -= blockId
             results.put(new SuccessFetchResult(BlockId(blockId), address, sizeMap(blockId), buf,
-              remainingBlocks.isEmpty, digest))
+              remainingBlocks.isEmpty, digestHex))
             logDebug("remainingBlocks: " + remainingBlocks)
           }
         }
@@ -402,7 +402,7 @@ final class ShuffleBlockFetcherIterator(
       shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
       result match {
-        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone, digest) =>
+        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone, digestHex) =>
           breakable {
             if (address != blockManager.blockManagerId) {
               numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
@@ -432,9 +432,9 @@ final class ShuffleBlockFetcherIterator(
             }
 
             // detect inputStream  corrupt
-            if (detectCorrupt && digest != null && digest.length > 0) {
-              val checkDigest = try {
-                DigestUtils.digestWithAlogrithm(digestAlgorithm, in)
+            if (detectCorrupt && digestHex.length > 0) {
+              val checkDigestHex = try {
+                DigestUtils.encodeHex(DigestUtils.digestWithAlogrithm(digestAlgorithm, in))
               } catch {
                 case e: IOException =>
                   logError("NESPARK-160: error to check md5", e)
@@ -442,11 +442,10 @@ final class ShuffleBlockFetcherIterator(
                   throwFetchFailedException(blockId, address, e)
               }
 
-              if (!DigestUtils.digestEqual(checkDigest, digest)) {
+              if (digestHex.equals(checkDigestHex)) {
                 buf.release()
                 val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest " +
-                  s"${DigestUtils.encodeHex(checkDigest)} of " +
-                  s"$blockId is not equal with orgin ${DigestUtils.encodeHex(digest)}")
+                  s"$checkDigestHex of $blockId is not equal with orgin $digestHex")
                 if (!corruptedBlocks.contains(blockId)) {
                   throwFetchFailedException(blockId, address, e)
                 } else {
@@ -616,7 +615,7 @@ object ShuffleBlockFetcherIterator {
       size: Long,
       buf: ManagedBuffer,
       isNetworkReqDone: Boolean,
-      digest: Array[Byte] = null) extends FetchResult {
+      digest: String = "") extends FetchResult {
     require(buf != null)
     require(size >= 0)
   }

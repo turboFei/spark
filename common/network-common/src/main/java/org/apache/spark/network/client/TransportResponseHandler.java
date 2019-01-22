@@ -171,7 +171,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         if (resp.digestLength == 0) {
           listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());
         } else {
-          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body(), resp.digest);
+          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body(), resp.digestHex);
         }
         resp.body().release();
       }
@@ -217,7 +217,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         StreamCallback callback = entry.getValue();
         if (resp.byteCount > 0) {
           StreamInterceptor interceptor = new StreamInterceptor(this, resp.streamId, resp.byteCount,
-            callback, resp.digest);
+            callback, resp.digestHex);
           try {
             TransportFrameDecoder frameDecoder = (TransportFrameDecoder)
               channel.pipeline().get(TransportFrameDecoder.HANDLER_NAME);
@@ -232,7 +232,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
             if (resp.digestLength == 0) {
               callback.onComplete(resp.streamId);
             } else {
-              callback.onComplete(resp.streamId, resp.digest);
+              callback.onComplete(resp.streamId, resp.digestHex);
             }
           } catch (Exception e) {
             logger.warn("Error in stream handler onComplete().", e);

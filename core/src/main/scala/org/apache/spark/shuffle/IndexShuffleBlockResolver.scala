@@ -271,7 +271,7 @@ private[spark] class IndexShuffleBlockResolver(
         getDataFile(blockId.shuffleId, blockId.mapId),
         offset,
         nextOffset - offset,
-        tempDigestBytes)
+        DigestUtils.encodeHex(tempDigestBytes))
     } finally {
       in.close()
     }
