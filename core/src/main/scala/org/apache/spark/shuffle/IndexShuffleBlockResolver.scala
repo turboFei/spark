@@ -54,7 +54,7 @@ private[spark] class IndexShuffleBlockResolver(
 
   // The digest conf for shuffle block check
   private final val algorithm = conf.get("spark.shuffle.digest.codec", "crc32")
-  private val digestLength = DigestUtils.getDigestLength(algorithm)
+  private final val digestLength = DigestUtils.getDigestLength(algorithm)
 
   private lazy val nullDigestBytes = new Array[Byte](digestLength).map(_ => 1.toByte)
 

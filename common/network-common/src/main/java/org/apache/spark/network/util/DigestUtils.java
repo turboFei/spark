@@ -100,16 +100,22 @@ public class DigestUtils {
         return buffer;
     }
 
-    public static boolean digestEqual(byte[] digest1, byte[] digest2) {
-        if (digest1.length != digest2.length) {
-            return  false;
-        }
-        for (int i = 0; i < digest1.length; i++) {
-            if (digest1[i] != digest2[i]) {
+    public static boolean digestEqual(byte[] digesta, byte[] digestb) {
+            if (digesta == digestb) return true;
+            if (digesta == null || digestb == null) {
                 return false;
             }
-        }
-        return true;
+            if (digesta.length != digestb.length) {
+                return false;
+            }
+
+            int result = 0;
+            // time-constant comparison
+            for (int i = 0; i < digesta.length; i++) {
+                result |= digesta[i] ^ digestb[i];
+            }
+            return result == 0;
+
     }
 
 }
