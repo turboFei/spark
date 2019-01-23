@@ -24,7 +24,7 @@ import java.nio.file.Files
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
-import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.netty.SparkTransportConf
 import org.apache.spark.network.util.{DigestUtils, LimitedInputStream}
 import org.apache.spark.shuffle.IndexShuffleBlockResolver.NOOP_REDUCE_ID
@@ -53,8 +53,9 @@ private[spark] class IndexShuffleBlockResolver(
   private val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
 
   // The digest conf for shuffle block check
-  private final val algorithm = conf.get("spark.shuffle.digest.codec", "crc32")
-  private final val digestLength = DigestUtils.getDigestLength(algorithm)
+  private final val digestEnable = conf.getBoolean("spark.shuffle.digest.enable", false);
+  private final lazy val algorithm = conf.get("spark.shuffle.digest.codec", "crc32")
+  private final lazy val digestLength = DigestUtils.getDigestLength(algorithm)
 
   def getDataFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
@@ -90,7 +91,8 @@ private[spark] class IndexShuffleBlockResolver(
   private def checkIndexDigestAndDataFile(index: File, data: File, blocks: Int,
       digests: Array[Array[Byte]]): (Array[Long], Array[Array[Byte]]) = {
     // the index file should have `block + 1` longs as offset.
-    if (index.length() != blocks * (8L + digestLength) + 8L) {
+    if ((!digestEnable && index.length() != (blocks +1) * 8L)
+      ||(digestEnable && index.length() != blocks * (8L + digestLength) + 8L)) {
       return null
     }
     val lengths = new Array[Long](blocks)
@@ -116,12 +118,14 @@ private[spark] class IndexShuffleBlockResolver(
         i += 1
       }
       // read the digests
-      val tempBytes = new Array[Byte](digestLength)
-      i = 0
-      while (i < blocks) {
-        in.readFully(tempBytes)
-        digestArr(i) = tempBytes.clone()
-        i += 1
+      if (digestEnable) {
+        val tempBytes = new Array[Byte](digestLength)
+        i = 0
+        while (i < blocks) {
+          in.readFully(tempBytes)
+          digestArr(i) = tempBytes.clone()
+          i += 1
+        }
       }
     } catch {
       case e: IOException =>
@@ -131,8 +135,8 @@ private[spark] class IndexShuffleBlockResolver(
     }
 
     // the size of data file should match with index file and the digests should match too
-    if (data.length() == lengths.sum && !(0 until blocks).exists(i =>
-      !DigestUtils.digestEqual(digestArr(i), digests(i)))) {
+    if (data.length() == lengths.sum && (digestEnable && !(0 until blocks).exists(i =>
+      !DigestUtils.digestEqual(digestArr(i), digests(i))))) {
       (lengths, digestArr)
     } else {
       null
@@ -169,21 +173,24 @@ private[spark] class IndexShuffleBlockResolver(
           out.writeLong(offset)
         }
 
-        for (i <- (0 until lengths.length)) {
-          val length = lengths(i)
-          if (length == 0) {
-            val nullDigest = new Array[Byte](digestLength)
-            out.write(nullDigest)
-            digestArr(i) = nullDigest
-          } else {
-            try {
-              val digest = DigestUtils.digestWithAlogrithm(algorithm,
-                new LimitedInputStream(dataIn, length))
-              out.write(digest)
-              digestArr(i) = digest
-            } catch {
-              case e: IOException =>
-                logError(s"NESPARK-160: Exception during make md5 for dataTmpFile $dataTmp ", e)
+        // if digest is enable, then write the digests
+        if (digestEnable) {
+          for (i <- (0 until lengths.length)) {
+            val length = lengths(i)
+            if (length == 0) {
+              val nullDigest = new Array[Byte](digestLength)
+              out.write(nullDigest)
+              digestArr(i) = nullDigest
+            } else {
+              try {
+                val digest = DigestUtils.digestWithAlogrithm(algorithm,
+                  new LimitedInputStream(dataIn, length))
+                out.write(digest)
+                digestArr(i) = digest
+              } catch {
+                case e: IOException =>
+                  logError(s"NESPARK-160: Exception during make md5 for dataTmpFile $dataTmp ", e)
+              }
             }
           }
         }
@@ -202,9 +209,11 @@ private[spark] class IndexShuffleBlockResolver(
           // Another attempt for the same task has already written our map outputs successfully,
           // so just use the existing partition lengths and delete our temporary map outputs.
           val existingLengths = existingLengthsDigest._1
-          val existingDigests = existingLengthsDigest._2
           System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
-          System.arraycopy(existingDigests, 0, digestArr, 0, digestArr.length)
+          if (digestEnable) {
+            val existingDigests = existingLengthsDigest._2
+            System.arraycopy(existingDigests, 0, digestArr, 0, digestArr.length)
+          }
           if (dataTmp != null && dataTmp.exists()) {
             dataTmp.delete()
           }
@@ -256,22 +265,30 @@ private[spark] class IndexShuffleBlockResolver(
         throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
           s"expected $expectedPosition but actual position was $actualPosition.")
       }
-      val tempDigestBytes = new Array[Byte](digestLength)
-      val reducerNum = (indexFile.length() - 8) / (8 + digestLength)
-      channel.position((reducerNum + 1) * 8L + blockId.reduceId * digestLength)
-      in.readFully(tempDigestBytes)
-      val actualDigestPosition = channel.position()
-      val exceptedDigestPosition = (reducerNum + 1) * 8L + (blockId.reduceId + 1) * digestLength
-      if (actualDigestPosition != exceptedDigestPosition) {
-        throw new Exception(s"NESPARK-160: Incorrect channel position after md5 file reads: " +
-          s"expected $exceptedDigestPosition but actual position was $actualDigestPosition.")
+      if (digestEnable) {
+        val tempDigestBytes = new Array[Byte](digestLength)
+        val reducerNum = (indexFile.length() - 8) / (8 + digestLength)
+        channel.position((reducerNum + 1) * 8L + blockId.reduceId * digestLength)
+        in.readFully(tempDigestBytes)
+        val actualDigestPosition = channel.position()
+        val exceptedDigestPosition = (reducerNum + 1) * 8L + (blockId.reduceId + 1) * digestLength
+        if (actualDigestPosition != exceptedDigestPosition) {
+          throw new Exception(s"NESPARK-160: Incorrect channel position after md5 file reads: " +
+            s"expected $exceptedDigestPosition but actual position was $actualDigestPosition.")
+        }
+        new DigestFileSegmentManagedBuffer(
+          transportConf,
+          getDataFile(blockId.shuffleId, blockId.mapId),
+          offset,
+          nextOffset - offset,
+          DigestUtils.encodeHex(tempDigestBytes))
+      } else {
+        new FileSegmentManagedBuffer(
+          transportConf,
+          getDataFile(blockId.shuffleId, blockId.mapId),
+          offset,
+          nextOffset - offset)
       }
-      new FileSegmentManagedBuffer(
-        transportConf,
-        getDataFile(blockId.shuffleId, blockId.mapId),
-        offset,
-        nextOffset - offset,
-        DigestUtils.encodeHex(tempDigestBytes))
     } finally {
       in.close()
     }

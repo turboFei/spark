@@ -51,6 +51,19 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
     this.digestHex = digestHex;
   }
 
+  StreamInterceptor(
+          TransportResponseHandler handler,
+          String streamId,
+          long byteCount,
+          StreamCallback callback) {
+    this.handler = handler;
+    this.streamId = streamId;
+    this.byteCount = byteCount;
+    this.callback = callback;
+    this.bytesRead = 0;
+    this.digestHex = "";
+  }
+
   @Override
   public void exceptionCaught(Throwable cause) throws Exception {
     handler.deactivateStream();

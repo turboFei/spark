@@ -246,7 +246,7 @@ final class ShuffleBlockFetcherIterator(
       }
 
       override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
-        onBlockFetchSuccess(blockId, data, null)
+        onBlockFetchSuccess(blockId, data, "")
       }
 
       override def onBlockFetchFailure(blockId: String, e: Throwable): Unit = {

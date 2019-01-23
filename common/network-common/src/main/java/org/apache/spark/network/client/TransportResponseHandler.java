@@ -28,17 +28,10 @@ import com.google.common.annotations.VisibleForTesting;
 import io.netty.channel.Channel;
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.commons.lang3.tuple.Pair;
+import org.apache.spark.network.protocol.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.protocol.ChunkFetchFailure;
-import org.apache.spark.network.protocol.ChunkFetchSuccess;
-import org.apache.spark.network.protocol.ResponseMessage;
-import org.apache.spark.network.protocol.RpcFailure;
-import org.apache.spark.network.protocol.RpcResponse;
-import org.apache.spark.network.protocol.StreamChunkId;
-import org.apache.spark.network.protocol.StreamFailure;
-import org.apache.spark.network.protocol.StreamResponse;
 import org.apache.spark.network.server.MessageHandler;
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 import org.apache.spark.network.util.TransportFrameDecoder;
@@ -168,11 +161,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         resp.body().release();
       } else {
         outstandingFetches.remove(resp.streamChunkId);
-        if (resp.digestLength == 0) {
-          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());
-        } else {
-          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body(), resp.digestHex);
-        }
+        listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());
         resp.body().release();
       }
     } else if (message instanceof ChunkFetchFailure) {
@@ -217,10 +206,77 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         StreamCallback callback = entry.getValue();
         if (resp.byteCount > 0) {
           StreamInterceptor interceptor = new StreamInterceptor(this, resp.streamId, resp.byteCount,
-            callback, resp.digestHex);
+            callback);
           try {
             TransportFrameDecoder frameDecoder = (TransportFrameDecoder)
               channel.pipeline().get(TransportFrameDecoder.HANDLER_NAME);
+            frameDecoder.setInterceptor(interceptor);
+            streamActive = true;
+          } catch (Exception e) {
+            logger.error("Error installing stream handler.", e);
+            deactivateStream();
+          }
+        } else {
+          try {
+            callback.onComplete(resp.streamId);
+          } catch (Exception e) {
+            logger.warn("Error in stream handler onComplete().", e);
+          }
+        }
+      } else {
+        logger.error("Could not find callback for StreamResponse.");
+      }
+    } else if (message instanceof StreamFailure) {
+      StreamFailure resp = (StreamFailure) message;
+      Pair<String, StreamCallback> entry = streamCallbacks.poll();
+      if (entry != null) {
+        StreamCallback callback = entry.getValue();
+        try {
+          callback.onFailure(resp.streamId, new RuntimeException(resp.error));
+        } catch (IOException ioe) {
+          logger.warn("Error in stream failure handler.", ioe);
+        }
+      } else {
+        logger.warn("Stream failure with unknown callback: {}", resp.error);
+      }
+    } else if (message instanceof DigestChunkFetchSuccess) {
+      DigestChunkFetchSuccess resp = (DigestChunkFetchSuccess) message;
+      ChunkReceivedCallback listener = outstandingFetches.get(resp.streamChunkId);
+      if (listener == null) {
+        logger.warn("Ignoring response for block {} from {} since it is not outstanding",
+                resp.streamChunkId, getRemoteAddress(channel));
+        resp.body().release();
+      } else {
+        outstandingFetches.remove(resp.streamChunkId);
+        if (resp.digestLength == 0) {
+          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());
+        } else {
+          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body(), resp.digestHex);
+        }
+        resp.body().release();
+      }
+    } else if (message instanceof DigestChunkFetchFailure) {
+      DigestChunkFetchFailure resp = (DigestChunkFetchFailure) message;
+      ChunkReceivedCallback listener = outstandingFetches.get(resp.streamChunkId);
+      if (listener == null) {
+        logger.warn("Ignoring response for block {} from {} ({}) since it is not outstanding",
+                resp.streamChunkId, getRemoteAddress(channel), resp.errorString);
+      } else {
+        outstandingFetches.remove(resp.streamChunkId);
+        listener.onFailure(resp.streamChunkId.chunkIndex, new ChunkFetchFailureException(
+                "Failure while fetching " + resp.streamChunkId + ": " + resp.errorString));
+      }
+    } else if (message instanceof DigestStreamResponse) {
+      DigestStreamResponse resp = (DigestStreamResponse) message;
+      Pair<String, StreamCallback> entry = streamCallbacks.poll();
+      if (entry != null) {
+        StreamCallback callback = entry.getValue();
+        if (resp.byteCount > 0) {
+          StreamInterceptor interceptor = new StreamInterceptor(this, resp.streamId, resp.byteCount,
+                  callback, resp.digestHex);
+          try {
+            TransportFrameDecoder frameDecoder = (TransportFrameDecoder)
+                    channel.pipeline().get(TransportFrameDecoder.HANDLER_NAME);
             frameDecoder.setInterceptor(interceptor);
             streamActive = true;
           } catch (Exception e) {
@@ -241,8 +297,8 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
       } else {
         logger.error("Could not find callback for StreamResponse.");
       }
-    } else if (message instanceof StreamFailure) {
-      StreamFailure resp = (StreamFailure) message;
+    } else if (message instanceof DigestStreamFailure) {
+      DigestStreamFailure resp = (DigestStreamFailure) message;
       Pair<String, StreamCallback> entry = streamCallbacks.poll();
       if (entry != null) {
         StreamCallback callback = entry.getValue();

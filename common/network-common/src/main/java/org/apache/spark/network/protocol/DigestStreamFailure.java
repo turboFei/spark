@@ -20,61 +20,48 @@ package org.apache.spark.network.protocol;
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
 
-import org.apache.spark.network.buffer.ManagedBuffer;
-
 /**
- * Response to {@link StreamRequest} when the stream has been successfully opened.
- * <p>
- * Note the message itself does not contain the stream data. That is written separately by the
- * sender. The receiver is expected to set a temporary channel handler that will consume the
- * number of bytes this message says the stream has.
+ * Message indicating an error when transferring a stream.
  */
-public final class StreamResponse extends AbstractResponseMessage {
+public final class DigestStreamFailure extends AbstractMessage implements ResponseMessage {
   public final String streamId;
-  public final long byteCount;
+  public final String error;
 
-  public StreamResponse(String streamId, long byteCount, ManagedBuffer buffer) {
-    super(buffer, false);
+  public DigestStreamFailure(String streamId, String error) {
     this.streamId = streamId;
-    this.byteCount = byteCount;
+    this.error = error;
   }
 
   @Override
-  public Type type() { return Type.StreamResponse; }
+  public Type type() { return Type.DigestStreamFailure; }
 
   @Override
   public int encodedLength() {
-    return 8 + Encoders.Strings.encodedLength(streamId);
+    return Encoders.Strings.encodedLength(streamId) + Encoders.Strings.encodedLength(error);
   }
 
-  /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
   @Override
   public void encode(ByteBuf buf) {
     Encoders.Strings.encode(buf, streamId);
-    buf.writeLong(byteCount);
+    Encoders.Strings.encode(buf, error);
   }
 
-  @Override
-  public ResponseMessage createFailureResponse(String error) {
-    return new StreamFailure(streamId, error);
-  }
-
-  public static StreamResponse decode(ByteBuf buf) {
+  public static DigestStreamFailure decode(ByteBuf buf) {
     String streamId = Encoders.Strings.decode(buf);
-    long byteCount = buf.readLong();
-    return new StreamResponse(streamId, byteCount, null);
+    String error = Encoders.Strings.decode(buf);
+    return new DigestStreamFailure(streamId, error);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(byteCount, streamId, body());
+    return Objects.hashCode(streamId, error);
   }
 
   @Override
   public boolean equals(Object other) {
-    if (other instanceof StreamResponse) {
-      StreamResponse o = (StreamResponse) other;
-      return byteCount == o.byteCount && streamId.equals(o.streamId);
+    if (other instanceof DigestStreamFailure) {
+      DigestStreamFailure o = (DigestStreamFailure) other;
+      return streamId.equals(o.streamId) && error.equals(o.error);
     }
     return false;
   }
@@ -83,8 +70,7 @@ public final class StreamResponse extends AbstractResponseMessage {
   public String toString() {
     return Objects.toStringHelper(this)
       .add("streamId", streamId)
-      .add("byteCount", byteCount)
-      .add("body", body())
+      .add("error", error)
       .toString();
   }
 

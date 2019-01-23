@@ -17,42 +17,52 @@
 
 package org.apache.spark.network.buffer;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
-import java.nio.file.StandardOpenOption;
-
 import com.google.common.base.Objects;
 import com.google.common.io.ByteStreams;
 import io.netty.channel.DefaultFileRegion;
-
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.LimitedInputStream;
 import org.apache.spark.network.util.TransportConf;
 
+import java.io.*;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
+import java.nio.file.StandardOpenOption;
+
 /**
  * A {@link ManagedBuffer} backed by a segment in a file.
  */
-public final class FileSegmentManagedBuffer extends ManagedBuffer {
+public final class DigestFileSegmentManagedBuffer extends ManagedBuffer {
   private final TransportConf conf;
   private final File file;
   private final long offset;
   private final long length;
+  private final String digestHex;
 
-  public FileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length) {
+
+  public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length) {
     this.conf = conf;
     this.file = file;
     this.offset = offset;
     this.length = length;
+    this.digestHex = "";
+  }
+  public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, String digestHex) {
+    this.conf = conf;
+    this.file = file;
+    this.offset = offset;
+    this.length = length;
+    this.digestHex = digestHex;
   }
 
   @Override
   public long size() {
     return length;
+  }
+
+
+  public String getDigestHex() {
+    return digestHex;
   }
 
   @Override
@@ -150,6 +160,7 @@ public final class FileSegmentManagedBuffer extends ManagedBuffer {
       .add("file", file)
       .add("offset", offset)
       .add("length", length)
+      .add("digestHex", digestHex)
       .toString();
   }
 }

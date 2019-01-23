@@ -32,15 +32,12 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Throwables;
 import com.google.common.util.concurrent.SettableFuture;
 import io.netty.channel.Channel;
+import org.apache.spark.network.protocol.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import org.apache.spark.network.buffer.NioManagedBuffer;
-import org.apache.spark.network.protocol.ChunkFetchRequest;
-import org.apache.spark.network.protocol.OneWayMessage;
-import org.apache.spark.network.protocol.RpcRequest;
-import org.apache.spark.network.protocol.StreamChunkId;
-import org.apache.spark.network.protocol.StreamRequest;
+
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 /**
@@ -76,11 +73,20 @@ public class TransportClient implements Closeable {
   private final TransportResponseHandler handler;
   @Nullable private String clientId;
   private volatile boolean timedOut;
+  private final boolean digestEnable;
 
   public TransportClient(Channel channel, TransportResponseHandler handler) {
     this.channel = Preconditions.checkNotNull(channel);
     this.handler = Preconditions.checkNotNull(handler);
     this.timedOut = false;
+    this.digestEnable = false;
+  }
+
+  public TransportClient(Channel channel, TransportResponseHandler handler, boolean digestEnable) {
+    this.channel = Preconditions.checkNotNull(channel);
+    this.handler = Preconditions.checkNotNull(handler);
+    this.timedOut = false;
+    this.digestEnable = digestEnable;
   }
 
   public Channel getChannel() {
@@ -141,7 +147,8 @@ public class TransportClient implements Closeable {
     StreamChunkId streamChunkId = new StreamChunkId(streamId, chunkIndex);
     handler.addFetchRequest(streamChunkId, callback);
 
-    channel.writeAndFlush(new ChunkFetchRequest(streamChunkId)).addListener(future -> {
+    channel.writeAndFlush(digestEnable ? new DigestChunkFetchRequest(streamChunkId) :
+            new ChunkFetchRequest(streamChunkId)).addListener(future -> {
       if (future.isSuccess()) {
         long timeTaken = System.currentTimeMillis() - startTime;
         if (logger.isTraceEnabled()) {
@@ -180,7 +187,8 @@ public class TransportClient implements Closeable {
     // when responses arrive.
     synchronized (this) {
       handler.addStreamCallback(streamId, callback);
-      channel.writeAndFlush(new StreamRequest(streamId)).addListener(future -> {
+      channel.writeAndFlush(digestEnable ? new DigestStreamRequest(streamId) :
+              new StreamRequest(streamId)).addListener(future -> {
         if (future.isSuccess()) {
           long timeTaken = System.currentTimeMillis() - startTime;
           if (logger.isTraceEnabled()) {

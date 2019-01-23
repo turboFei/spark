@@ -41,6 +41,7 @@ public class TransportConf {
   private final String SPARK_NETWORK_IO_RETRYWAIT_KEY;
   private final String SPARK_NETWORK_IO_LAZYFD_KEY;
   private final String SPARK_NETWORK_VERBOSE_METRICS;
+  private final String SPARK_NETWORK_SHUFFLE_DIGEST;
 
   private final ConfigProvider conf;
 
@@ -63,6 +64,7 @@ public class TransportConf {
     SPARK_NETWORK_IO_RETRYWAIT_KEY = getConfKey("io.retryWait");
     SPARK_NETWORK_IO_LAZYFD_KEY = getConfKey("io.lazyFD");
     SPARK_NETWORK_VERBOSE_METRICS = getConfKey("io.enableVerboseMetrics");
+    SPARK_NETWORK_SHUFFLE_DIGEST = getConfKey("shuffle.digest.enable");
   }
 
   public int getInt(String name, int defaultValue) {
@@ -280,5 +282,9 @@ public class TransportConf {
    */
   public long maxChunksBeingTransferred() {
     return conf.getLong("spark.shuffle.maxChunksBeingTransferred", Long.MAX_VALUE);
+  }
+
+  public boolean shuffleDigestEnable() {
+    return conf.getBoolean(SPARK_NETWORK_SHUFFLE_DIGEST, false);
   }
 }

@@ -35,6 +35,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.Weigher;
 import com.google.common.collect.Maps;
+import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
 import org.slf4j.Logger;
@@ -66,6 +67,8 @@ public class ExternalShuffleBlockResolver {
    */
   private static final String APP_KEY_PREFIX = "AppExecShuffleInfo";
   private static final StoreVersion CURRENT_VERSION = new StoreVersion(1, 0);
+
+  private final boolean digestEnable;
 
   // Map containing all registered executors' metadata.
   @VisibleForTesting
@@ -106,7 +109,7 @@ public class ExternalShuffleBlockResolver {
       Executor directoryCleaner) throws IOException {
     this.conf = conf;
     this.registeredExecutorFile = registeredExecutorFile;
-    Boolean digestEnable = Boolean.parseBoolean(conf.get("spark.shuffle.digest.enable", "false"));
+    digestEnable = Boolean.parseBoolean(conf.get("spark.shuffle.digest.enable", "false"));
     String indexCacheSize = conf.get("spark.shuffle.service.index.cache.size", "100m");
     String digestAlgorithm = conf.get("spark.shuffle.digest.codec", "crc32");
     CacheLoader<File, ShuffleIndexInformation> indexCacheLoader =
@@ -242,13 +245,22 @@ public class ExternalShuffleBlockResolver {
     try {
       ShuffleIndexInformation shuffleIndexInformation = shuffleIndexCache.get(indexFile);
       ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(reduceId);
-      return new FileSegmentManagedBuffer(
-        conf,
-        getFile(executor.localDirs, executor.subDirsPerLocalDir,
-          "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
-        shuffleIndexRecord.getOffset(),
-        shuffleIndexRecord.getLength(),
-        shuffleIndexRecord.getDigestHex());
+      if (digestEnable) {
+        return new DigestFileSegmentManagedBuffer(
+                conf,
+                getFile(executor.localDirs, executor.subDirsPerLocalDir,
+                        "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
+                shuffleIndexRecord.getOffset(),
+                shuffleIndexRecord.getLength(),
+                shuffleIndexRecord.getDigestHex());
+      } else {
+        return new FileSegmentManagedBuffer(
+                conf,
+                getFile(executor.localDirs, executor.subDirsPerLocalDir,
+                        "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
+                shuffleIndexRecord.getOffset(),
+                shuffleIndexRecord.getLength());
+      }
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     }
