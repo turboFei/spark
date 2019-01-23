@@ -23,6 +23,7 @@ import java.nio.ByteBuffer;
 import com.google.common.base.Throwables;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelFuture;
+import org.apache.spark.network.protocol.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,22 +32,7 @@ import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.buffer.NioManagedBuffer;
 import org.apache.spark.network.client.RpcResponseCallback;
 import org.apache.spark.network.client.TransportClient;
-import org.apache.spark.network.protocol.ChunkFetchRequest;
-import org.apache.spark.network.protocol.ChunkFetchFailure;
-import org.apache.spark.network.protocol.ChunkFetchSuccess;
-import org.apache.spark.network.protocol.DigestChunkFetchRequest;
-import org.apache.spark.network.protocol.DigestChunkFetchSuccess;
-import org.apache.spark.network.protocol.DigestStreamRequest;
-import org.apache.spark.network.protocol.DigestStreamResponse;
-import org.apache.spark.network.protocol.Encodable;
-import org.apache.spark.network.protocol.OneWayMessage;
-import org.apache.spark.network.protocol.RequestMessage;
-import org.apache.spark.network.protocol.RpcFailure;
-import org.apache.spark.network.protocol.RpcRequest;
-import org.apache.spark.network.protocol.RpcResponse;
-import org.apache.spark.network.protocol.StreamFailure;
-import org.apache.spark.network.protocol.StreamRequest;
-import org.apache.spark.network.protocol.StreamResponse;
+
 import static org.apache.spark.network.util.NettyUtils.getRemoteAddress;
 
 /**
@@ -242,7 +228,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     } catch (Exception e) {
       logger.error(String.format("Error opening block %s for request from %s",
               req.streamChunkId, getRemoteAddress(channel)), e);
-      respond(new ChunkFetchFailure(req.streamChunkId, Throwables.getStackTraceAsString(e)));
+      respond(new DigestChunkFetchFailure(req.streamChunkId, Throwables.getStackTraceAsString(e)));
       return;
     }
 
@@ -277,7 +263,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     } catch (Exception e) {
       logger.error(String.format(
               "Error opening stream %s for request from %s", req.streamId, getRemoteAddress(channel)), e);
-      respond(new StreamFailure(req.streamId, Throwables.getStackTraceAsString(e)));
+      respond(new DigestStreamFailure(req.streamId, Throwables.getStackTraceAsString(e)));
       return;
     }
 
