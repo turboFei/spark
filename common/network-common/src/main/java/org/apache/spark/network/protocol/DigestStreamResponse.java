@@ -69,7 +69,7 @@ public final class DigestStreamResponse extends AbstractResponseMessage {
 
   @Override
   public ResponseMessage createFailureResponse(String error) {
-    return new StreamFailure(streamId, error);
+    return new DigestStreamFailure(streamId, error);
   }
 
   public static DigestStreamResponse decode(ByteBuf buf) {

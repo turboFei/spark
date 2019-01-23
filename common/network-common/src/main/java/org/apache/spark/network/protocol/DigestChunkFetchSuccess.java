@@ -67,7 +67,7 @@ public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
 
   @Override
   public ResponseMessage createFailureResponse(String error) {
-    return new ChunkFetchFailure(streamChunkId, error);
+    return new DigestChunkFetchFailure(streamChunkId, error);
   }
 
   /** Decoding uses the given ByteBuf as our data, and will retain() it. */
