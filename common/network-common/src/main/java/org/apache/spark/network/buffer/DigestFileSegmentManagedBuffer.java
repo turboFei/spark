@@ -39,14 +39,6 @@ public final class DigestFileSegmentManagedBuffer extends ManagedBuffer {
   private final long length;
   private final String digestHex;
 
-
-  public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length) {
-    this.conf = conf;
-    this.file = file;
-    this.offset = offset;
-    this.length = length;
-    this.digestHex = "";
-  }
   public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, String digestHex) {
     this.conf = conf;
     this.file = file;

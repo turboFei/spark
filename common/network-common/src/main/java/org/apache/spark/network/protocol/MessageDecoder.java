@@ -80,6 +80,24 @@ public final class MessageDecoder extends MessageToMessageDecoder<ByteBuf> {
       case StreamFailure:
         return StreamFailure.decode(in);
 
+      case DigestChunkFetchRequest:
+        return DigestChunkFetchRequest.decode(in);
+
+      case DigestChunkFetchSuccess:
+        return DigestChunkFetchSuccess.decode(in);
+
+      case DigestChunkFetchFailure:
+        return DigestChunkFetchFailure.decode(in);
+
+      case DigestStreamRequest:
+        return DigestStreamRequest.decode(in);
+
+      case DigestStreamResponse:
+        return DigestStreamResponse.decode(in);
+
+      case DigestStreamFailure:
+        return DigestStreamFailure.decode(in);
+
       default:
         throw new IllegalArgumentException("Unexpected message type: " + msgType);
     }
