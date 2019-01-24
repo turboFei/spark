@@ -525,4 +525,20 @@ package object config {
       .checkValue(v => v > 0, "The threshold should be positive.")
       .createWithDefault(10000000)
 
+  private[spark] val SHUFFLE_DIGEST_ENABLE =
+    ConfigBuilder("spark.shuffle.digest.enable")
+      .internal()
+      .doc("The parameter to control whether check the transmitted data during shuffle.")
+      .booleanConf
+      .createWithDefault(false)
+
+  private[spark] val SHUFFLE_DIGEST_ALGORITHM =
+    ConfigBuilder("spark.shuffle.digest.algorithm")
+      .internal()
+      .doc("The algorithm for checking transmitted data during shuffle, " +
+        "crc32 or md5, default is crc32.")
+      .stringConf
+      .createWithDefault("crc32")
+
+
 }

@@ -713,6 +713,20 @@ Apart from these, the following properties are also available, and may be useful
   </td>
 </tr>
 <tr>
+  <td><code>spark.shuffle.digest.enable</code></td>
+  <td>false</td>
+  <td>
+    The parameter to control whether check the transmitted data during shuffle.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.shuffle.digest.algorithm</code></td>
+  <td>crc32</td>
+  <td>
+    The algorithm for checking transmitted data during shuffle, crc32 or md5, default is crc32.
+  </td>
+</tr>
+<tr>
   <td><code>spark.io.encryption.enabled</code></td>
   <td>false</td>
   <td>
