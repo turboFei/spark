@@ -478,6 +478,7 @@ final class ShuffleBlockFetcherIterator(
             }
 
             input = streamWrapper(blockId, in)
+            // If digestEnable is false, fallback to the origin detect corrupt policy
             // Only copy the stream if it's wrapped by compression or encryption, also the size of
             // block is small (the decompressed block is smaller than maxBytesInFlight)
             if (!digestEnable && detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
