@@ -202,7 +202,9 @@ private[spark] class IndexShuffleBlockResolver(
         }
       } {
         out.close()
-        dataIn.close()
+        if (dataIn != null) {
+          dataIn.close()
+        }
       }
 
       val dataFile = getDataFile(shuffleId, mapId)
