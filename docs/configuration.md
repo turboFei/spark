@@ -720,7 +720,7 @@ Apart from these, the following properties are also available, and may be useful
   </td>
 </tr>
 <tr>
-  <td><code>spark.shuffle.digest.algorithm</code></td>
+  <td><code>spark.shuffle.digest.codec</code></td>
   <td>crc32</td>
   <td>
     The algorithm for checking transmitted data during shuffle, crc32 or md5, default is crc32.
