@@ -90,15 +90,13 @@ private[spark] class IndexShuffleBlockResolver(
    * Check whether the given index and data files match each other.
    * If so, return the partition lengths in the data file. Otherwise return null.
    */
-  private def checkIndexDigestAndDataFile(index: File, data: File, blocks: Int,
-      digests: Array[Array[Byte]]): (Array[Long], Array[Array[Byte]]) = {
+  private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
     // the index file should have `block + 1` longs as offset.
-    if ((!digestEnable && index.length() != (blocks +1) * 8L)
-      ||(digestEnable && index.length() != blocks * (8L + digestLength) + 8L)) {
+    if ((!digestEnable && index.length() != (blocks + 1) * 8L) ||
+      (digestEnable && index.length() != 8L + blocks * (digestLength + 8L))) {
       return null
     }
     val lengths = new Array[Long](blocks)
-    val digestArr = new Array[Array[Byte]](blocks)
     // Read the lengths of blocks
     val in = try {
       new DataInputStream(new NioBufferedFileInputStream(index))
@@ -119,16 +117,6 @@ private[spark] class IndexShuffleBlockResolver(
         offset = off
         i += 1
       }
-      // read the digests
-      if (digestEnable) {
-        val tempBytes = new Array[Byte](digestLength)
-        i = 0
-        while (i < blocks) {
-          in.readFully(tempBytes)
-          digestArr(i) = tempBytes.clone()
-          i += 1
-        }
-      }
     } catch {
       case e: IOException =>
         return null
@@ -136,10 +124,9 @@ private[spark] class IndexShuffleBlockResolver(
       in.close()
     }
 
-    // the size of data file should match with index file and the digests should match too
-    if (data.length() == lengths.sum && (digestEnable && !(0 until blocks).exists(i =>
-      !DigestUtils.digestEqual(digestArr(i), digests(i))))) {
-      (lengths, digestArr)
+    // the size of data file should match with index file
+    if (data.length() == lengths.sum) {
+      lengths
     } else {
       null
     }
@@ -162,14 +149,8 @@ private[spark] class IndexShuffleBlockResolver(
       dataTmp: File): Unit = {
     val indexFile = getIndexFile(shuffleId, mapId)
     val indexTmp = Utils.tempFileWith(indexFile)
-    val digestArr = new Array[Array[Byte]](lengths.length)
     try {
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
-      val dataIn = if (dataTmp == null) {
-        null
-      } else {
-        new FileInputStream(dataTmp)
-      }
       Utils.tryWithSafeFinally {
         // We take in lengths of each block, need to convert it to offsets.
         var offset = 0L
@@ -178,50 +159,19 @@ private[spark] class IndexShuffleBlockResolver(
           offset += length
           out.writeLong(offset)
         }
-
-        // if digest is enable, then write the digests
-        if (digestEnable) {
-          for (i <- (0 until lengths.length)) {
-            val length = lengths(i)
-            if (dataIn == null || length == 0) {
-              val nullDigest = new Array[Byte](digestLength)
-              out.write(nullDigest)
-              digestArr(i) = nullDigest
-            } else {
-              try {
-                val digest = DigestUtils.digestWithAlogrithm(algorithm,
-                  new LimitedInputStream(dataIn, length))
-                out.write(digest)
-                digestArr(i) = digest
-              } catch {
-                case e: IOException =>
-                  logError(s"NESPARK-160: Exception during make md5 for dataTmpFile $dataTmp ", e)
-              }
-            }
-          }
-        }
       } {
         out.close()
-        if (dataIn != null) {
-          dataIn.close()
-        }
       }
 
       val dataFile = getDataFile(shuffleId, mapId)
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
       synchronized {
-        val existingLengthsDigest = checkIndexDigestAndDataFile(indexFile, dataFile,
-          lengths.length, digestArr)
-        if (existingLengthsDigest != null) {
+        val existingLengths = checkIndexAndDataFile(indexFile, dataFile, lengths.length)
+        if (existingLengths != null) {
           // Another attempt for the same task has already written our map outputs successfully,
           // so just use the existing partition lengths and delete our temporary map outputs.
-          val existingLengths = existingLengthsDigest._1
           System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
-          if (digestEnable) {
-            val existingDigests = existingLengthsDigest._2
-            System.arraycopy(existingDigests, 0, digestArr, 0, digestArr.length)
-          }
           if (dataTmp != null && dataTmp.exists()) {
             dataTmp.delete()
           }
@@ -240,6 +190,39 @@ private[spark] class IndexShuffleBlockResolver(
           }
           if (dataTmp != null && dataTmp.exists() && !dataTmp.renameTo(dataFile)) {
             throw new IOException("fail to rename file " + dataTmp + " to " + dataFile)
+          }
+          // Then write the digests
+          if (digestEnable && indexFile.exists()) {
+            val dataIn = if (dataFile != null && dataFile.exists()) {
+              new FileInputStream(dataFile)
+            } else {
+              null
+            }
+            val indexFileAppend = new DataOutputStream(new BufferedOutputStream(
+              new FileOutputStream(indexFile, true)))
+            Utils.tryWithSafeFinally {
+              val nullDigests = new Array[Byte](digestLength)
+              for (length <- lengths) {
+                if (dataIn == null || length == 0) {
+                  indexFileAppend.write(nullDigests)
+                } else {
+                  try {
+                    val digest = DigestUtils.digestWithAlogrithm(algorithm,
+                      new LimitedInputStream(dataIn, length))
+                    indexFileAppend.write(digest)
+                  } catch {
+                    case e: IOException =>
+                      logError(s"NESPARK-160: error when make digest for $dataFile with " +
+                        s"algorithm $algorithm", e)
+                  }
+                }
+              }
+            } {
+              if (dataIn != null) {
+                dataIn.close()
+              }
+              indexFileAppend.close()
+            }
           }
         }
       }
