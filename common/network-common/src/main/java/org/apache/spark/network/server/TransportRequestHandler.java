@@ -250,7 +250,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
     if (buf instanceof DigestFileSegmentManagedBuffer) {
-      respond(new DigestChunkFetchSuccess(req.streamChunkId, buf, ((DigestFileSegmentManagedBuffer)buf).getDigestHex())).addListener(future -> {
+      respond(new DigestChunkFetchSuccess(req.streamChunkId, buf, ((DigestFileSegmentManagedBuffer)buf).getDigestBuf())).addListener(future -> {
         streamManager.chunkSent(req.streamChunkId.streamId);
       });
     } else {
@@ -286,7 +286,7 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     if (buf != null) {
       streamManager.streamBeingSent(req.streamId);
       if (buf instanceof DigestFileSegmentManagedBuffer) {
-        respond(new DigestStreamResponse(req.streamId, buf.size(), buf, ((DigestFileSegmentManagedBuffer)buf).getDigestHex())).addListener(future -> {
+        respond(new DigestStreamResponse(req.streamId, buf.size(), buf, ((DigestFileSegmentManagedBuffer)buf).getDigestBuf())).addListener(future -> {
           streamManager.streamSent(req.streamId);
         });
       } else {

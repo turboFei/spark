@@ -22,6 +22,7 @@ import java.nio.channels.ClosedChannelException;
 
 import io.netty.buffer.ByteBuf;
 
+import io.netty.buffer.Unpooled;
 import org.apache.spark.network.util.TransportFrameDecoder;
 
 /**
@@ -35,20 +36,20 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
   private final long byteCount;
   private final StreamCallback callback;
   private long bytesRead;
-  private String digestHex;
+  private ByteBuf digestBuf;
 
   StreamInterceptor(
       TransportResponseHandler handler,
       String streamId,
       long byteCount,
       StreamCallback callback,
-      String digestHex) {
+      ByteBuf digestBuf) {
     this.handler = handler;
     this.streamId = streamId;
     this.byteCount = byteCount;
     this.callback = callback;
     this.bytesRead = 0;
-    this.digestHex = digestHex;
+    this.digestBuf = digestBuf;
   }
 
   StreamInterceptor(
@@ -61,7 +62,7 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
     this.byteCount = byteCount;
     this.callback = callback;
     this.bytesRead = 0;
-    this.digestHex = "";
+    this.digestBuf = Unpooled.buffer(0);
   }
 
   @Override
@@ -92,10 +93,10 @@ class StreamInterceptor implements TransportFrameDecoder.Interceptor {
       throw re;
     } else if (bytesRead == byteCount) {
       handler.deactivateStream();
-      if (digestHex.length() == 0) {
+      if (digestBuf.readableBytes() == 0) {
         callback.onComplete(streamId);
       } else {
-        callback.onComplete(streamId, digestHex);
+        callback.onComplete(streamId, digestBuf);
       }
     }
 

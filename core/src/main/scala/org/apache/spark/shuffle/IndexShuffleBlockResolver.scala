@@ -21,6 +21,7 @@ import java.io._
 import java.nio.channels.Channels
 import java.nio.file.Files
 
+import io.netty.buffer.{ByteBuf, Unpooled}
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
@@ -281,7 +282,7 @@ private[spark] class IndexShuffleBlockResolver(
           getDataFile(blockId.shuffleId, blockId.mapId),
           offset,
           nextOffset - offset,
-          DigestUtils.encodeHex(tempDigestBytes))
+          Unpooled.wrappedBuffer(tempDigestBytes))
       } else {
         new FileSegmentManagedBuffer(
           transportConf,

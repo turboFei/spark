@@ -19,6 +19,7 @@ package org.apache.spark.network.shuffle;
 
 import java.util.EventListener;
 
+import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.buffer.ManagedBuffer;
 
 public interface BlockFetchingListener extends EventListener {
@@ -34,7 +35,7 @@ public interface BlockFetchingListener extends EventListener {
    * checkSum of shuffle block.Here provide a default method body for that not every
    * blockFetchingListener need to implement one onBlockFetchSuccess method.
    */
-  default void onBlockFetchSuccess(String blockId, ManagedBuffer data,String digestHex) {
+  default void onBlockFetchSuccess(String blockId, ManagedBuffer data, ByteBuf digestBuf) {
     onBlockFetchSuccess(blockId, data);
   }
 

@@ -17,6 +17,7 @@
 
 package org.apache.spark.network.shuffle;
 
+import io.netty.buffer.Unpooled;
 import org.apache.spark.network.util.DigestUtils;
 
 import java.io.DataInputStream;
@@ -92,7 +93,7 @@ public class ShuffleIndexInformation {
       byte[] digest = new byte[digestLength];
       digests.position(reduceId * digestLength);
       digests.get(digest);
-      return new ShuffleIndexRecord(offset, nextOffset - offset, DigestUtils.encodeHex(digest));
+      return new ShuffleIndexRecord(offset, nextOffset - offset, digest);
     } else {
       return new ShuffleIndexRecord(offset, nextOffset - offset);
     }

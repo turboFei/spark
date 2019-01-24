@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 
+import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -93,9 +94,9 @@ public class OneForOneBlockFetcher {
     }
 
     @Override
-    public void onSuccess(int chunkIndex, ManagedBuffer buffer, String digestHex) {
+    public void onSuccess(int chunkIndex, ManagedBuffer buffer, ByteBuf digestBuf) {
       // On receipt of a chunk, pass it upwards as a block.
-      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer, digestHex);
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], buffer, digestBuf);
     }
 
     @Override
@@ -186,8 +187,8 @@ public class OneForOneBlockFetcher {
     }
 
     @Override
-    public void onComplete(String streamId, String digestHex) throws IOException {
-      listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead(), digestHex);
+    public void onComplete(String streamId, ByteBuf digestBuf) throws IOException {
+      listener.onBlockFetchSuccess(blockIds[chunkIndex], channel.closeAndRead(), digestBuf);
       if (!downloadFileManager.registerTempFileToClean(targetFile)) {
         targetFile.delete();
       }

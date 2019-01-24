@@ -19,8 +19,10 @@ package org.apache.spark.network.protocol;
 
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.buffer.NettyManagedBuffer;
+import org.apache.spark.network.util.DigestUtils;
 
 /**
  * Response to {@link ChunkFetchRequest} when a chunk exists and has been successfully fetched.
@@ -31,22 +33,22 @@ import org.apache.spark.network.buffer.NettyManagedBuffer;
  */
 public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
   public final StreamChunkId streamChunkId;
-  public final String digestHex;
+  public final ByteBuf digestBuf;
   public final int digestLength;
 
 
   public DigestChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer) {
     super(buffer, true);
     this.streamChunkId = streamChunkId;
-    this.digestHex = "";
+    this.digestBuf = Unpooled.buffer(0);
     this.digestLength = 0;
   }
 
-  public DigestChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, String digestHex) {
+  public DigestChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, ByteBuf digestBuf) {
     super(buffer, true);
     this.streamChunkId = streamChunkId;
-    this.digestHex = digestHex;
-    this.digestLength = digestHex.length();
+    this.digestBuf = digestBuf;
+    this.digestLength = digestBuf.readableBytes();
   }
 
   @Override
@@ -62,7 +64,7 @@ public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
   public void encode(ByteBuf buf) {
     streamChunkId.encode(buf);
     buf.writeInt(digestLength);
-    buf.writeBytes(digestHex.getBytes());
+    buf.writeBytes(digestBuf.array());
   }
 
   @Override
@@ -76,14 +78,17 @@ public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
     int digestLength = buf.readInt();
     byte[] digest = new byte[digestLength];
     buf.readBytes(digest);
+    ByteBuf digestBuf = Unpooled.wrappedBuffer(digest);
     buf.retain();
+    // retain the digestBuf
+    digestBuf.retain();
     NettyManagedBuffer managedBuf = new NettyManagedBuffer(buf.duplicate());
-    return new DigestChunkFetchSuccess(streamChunkId, managedBuf, new String(digest));
+    return new DigestChunkFetchSuccess(streamChunkId, managedBuf, digestBuf);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(streamChunkId, body(), digestLength, digestHex);
+    return Objects.hashCode(streamChunkId, body(), digestLength, digestBuf);
   }
 
   @Override
@@ -91,7 +96,7 @@ public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
     if (other instanceof DigestChunkFetchSuccess) {
       DigestChunkFetchSuccess o = (DigestChunkFetchSuccess) other;
       return streamChunkId.equals(o.streamChunkId) && super.equals(o)
-              && digestLength == o.digestLength && digestHex.equals(o.digestHex);
+              && digestLength == o.digestLength && DigestUtils.digestEqual(digestBuf.array(), o.digestBuf.array());
     }
     return false;
   }
@@ -101,7 +106,7 @@ public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
     return Objects.toStringHelper(this)
       .add("streamChunkId", streamChunkId)
       .add("digestLength", digestLength)
-      .add("digestHex", digestHex)
+      .add("digestHex", DigestUtils.encodeHex(digestBuf.array()))
       .add("buffer", body())
       .toString();
   }

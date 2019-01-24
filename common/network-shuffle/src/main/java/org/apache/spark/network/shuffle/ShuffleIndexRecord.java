@@ -23,18 +23,18 @@ package org.apache.spark.network.shuffle;
 public class ShuffleIndexRecord {
   private final long offset;
   private final long length;
-  private final String digestHex;
+  private final byte[] digest;
 
-  public ShuffleIndexRecord(long offset, long length, String digestHex) {
+  public ShuffleIndexRecord(long offset, long length, byte[] digest) {
     this.offset = offset;
     this.length = length;
-    this.digestHex = digestHex;
+    this.digest = digest;
   }
 
   public ShuffleIndexRecord(long offset, long length) {
     this.offset = offset;
     this.length = length;
-    this.digestHex = "";
+    this.digest = new byte[0];
   }
 
   public long getOffset() {
@@ -45,8 +45,8 @@ public class ShuffleIndexRecord {
     return length;
   }
 
-  public String getDigestHex() {
-    return digestHex;
+  public byte[] getDigest() {
+    return digest;
   }
 }
 

@@ -35,6 +35,7 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.Weigher;
 import com.google.common.collect.Maps;
+import io.netty.buffer.Unpooled;
 import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
@@ -252,7 +253,7 @@ public class ExternalShuffleBlockResolver {
                         "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
                 shuffleIndexRecord.getOffset(),
                 shuffleIndexRecord.getLength(),
-                shuffleIndexRecord.getDigestHex());
+                Unpooled.wrappedBuffer(shuffleIndexRecord.getDigest()));
       } else {
         return new FileSegmentManagedBuffer(
                 conf,
