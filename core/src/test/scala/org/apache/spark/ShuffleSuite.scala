@@ -404,6 +404,25 @@ abstract class ShuffleSuite extends SparkFunSuite with Matchers with LocalSparkC
 
     manager.unregisterShuffle(0)
   }
+
+  test("NESPARK-160: shuffle with digest enable") {
+    for (codec <- Array("md5", "crc32")) {
+      conf.set("spark.shuffle.digest.enable", "true")
+      conf.set("spark.shuffle.digest.codec", codec)
+      val sc = new SparkContext("local", "test", conf)
+      val numRecords = 10000
+
+      val wordCount = sc.parallelize(1 to numRecords, 4)
+        .map(key => (key, 1))
+        .reduceByKey(_ + _)
+        .collect()
+      val count = wordCount.length
+      val sum = wordCount.map(value => value._1).sum
+      assert(count == numRecords)
+      assert(sum == (1 to numRecords).sum)
+      sc.stop()
+    }
+  }
 }
 
 /**
