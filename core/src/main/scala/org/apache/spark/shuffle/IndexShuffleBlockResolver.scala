@@ -165,7 +165,7 @@ private[spark] class IndexShuffleBlockResolver(
     val digestArr = new Array[Array[Byte]](lengths.length)
     try {
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
-      val dataIn =  if (dataTmp == null) {
+      val dataIn = if (dataTmp == null) {
         null
       } else {
         new FileInputStream(dataTmp)
