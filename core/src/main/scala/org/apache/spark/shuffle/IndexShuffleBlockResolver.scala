@@ -165,7 +165,11 @@ private[spark] class IndexShuffleBlockResolver(
     val digestArr = new Array[Array[Byte]](lengths.length)
     try {
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
-      val dataIn = new FileInputStream(dataTmp);
+      val dataIn =  if (dataTmp == null) {
+        null
+      } else {
+        new FileInputStream(dataTmp)
+      }
       Utils.tryWithSafeFinally {
         // We take in lengths of each block, need to convert it to offsets.
         var offset = 0L
@@ -179,7 +183,7 @@ private[spark] class IndexShuffleBlockResolver(
         if (digestEnable) {
           for (i <- (0 until lengths.length)) {
             val length = lengths(i)
-            if (length == 0) {
+            if (dataIn == null || length == 0) {
               val nullDigest = new Array[Byte](digestLength)
               out.write(nullDigest)
               digestArr(i) = nullDigest
