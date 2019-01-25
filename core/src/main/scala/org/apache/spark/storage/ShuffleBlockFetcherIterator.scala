@@ -480,6 +480,8 @@ final class ShuffleBlockFetcherIterator(
                   in = buf.createInputStream()
                 }
               } else {
+                logInfo(s"NESPARK-160: the digest for address: ${address.host} and blockID:" +
+                  s"$blockId is null, local address is ${blockManager.blockManagerId.host}")
                 digestBuf.release();
               }
             }
