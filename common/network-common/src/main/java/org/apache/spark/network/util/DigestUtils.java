@@ -13,7 +13,7 @@ public class DigestUtils {
     private static final char[] DIGITS_LOWWER;
 
     public enum ALGORITHM {
-        CRC32, MD5
+        CRC, MD5
     }
 
     public static int getDigestLength(String algorithm) {
@@ -23,7 +23,7 @@ public class DigestUtils {
     static {
         ALOGRITHMS_LENGTH = new HashMap<>(2);
         ALOGRITHMS_LENGTH.put(ALGORITHM.MD5, 16);
-        ALOGRITHMS_LENGTH.put(ALGORITHM.CRC32, 8);
+        ALOGRITHMS_LENGTH.put(ALGORITHM.CRC, 8);
         DIGITS_LOWWER = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
 
     }
@@ -66,9 +66,19 @@ public class DigestUtils {
         if (algorithm.toLowerCase().startsWith("md5")) {
             return ALGORITHM.MD5;
         } else {
-            return ALGORITHM.CRC32;
+            return ALGORITHM.CRC;
         }
     }
+
+    public static String getAlgorithmString(String algorithm) {
+        switch (getAlgorithm(algorithm)) {
+            case MD5:
+                return "md5";
+            default:
+                return "crc";
+        }
+    }
+
     public static byte[] digestWithAlogrithm(String algorithm, InputStream data) throws  IOException {
         switch (getAlgorithm(algorithm)) {
             case MD5:

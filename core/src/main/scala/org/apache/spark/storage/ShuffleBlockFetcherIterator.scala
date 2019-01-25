@@ -73,7 +73,7 @@ final class ShuffleBlockFetcherIterator(
     maxReqSizeShuffleToMem: Long,
     detectCorrupt: Boolean,
     digestEnable: Boolean = false,
-    digestAlgorithm: String = "crc32")
+    digestAlgorithm: String = "crc")
   extends Iterator[(BlockId, InputStream)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._

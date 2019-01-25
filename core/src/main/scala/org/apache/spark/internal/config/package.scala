@@ -536,9 +536,9 @@ package object config {
     ConfigBuilder("spark.shuffle.digest.codec")
       .internal()
       .doc("The algorithm for checking transmitted data during shuffle, " +
-        "crc32 or md5, default is crc32.")
+        "crc or md5, default is crc.")
       .stringConf
-      .createWithDefault("crc32")
+      .createWithDefault("crc")
 
 
 }

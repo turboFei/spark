@@ -35,17 +35,15 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.Weigher;
 import com.google.common.collect.Maps;
-import io.netty.buffer.Unpooled;
-import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.FileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
-import org.apache.spark.network.util.DigestUtils;
 import org.apache.spark.network.util.LevelDBProvider;
 import org.apache.spark.network.util.LevelDBProvider.StoreVersion;
 import org.apache.spark.network.util.JavaUtils;
@@ -69,8 +67,6 @@ public class ExternalShuffleBlockResolver {
   private static final String APP_KEY_PREFIX = "AppExecShuffleInfo";
   private static final StoreVersion CURRENT_VERSION = new StoreVersion(1, 0);
 
-  private final boolean digestEnable;
-
   // Map containing all registered executors' metadata.
   @VisibleForTesting
   final ConcurrentMap<AppExecId, ExecutorShuffleInfo> executors;
@@ -80,6 +76,7 @@ public class ExternalShuffleBlockResolver {
    *  for each block fetch.
    */
   private final LoadingCache<File, ShuffleIndexInformation> shuffleIndexCache;
+  private final LoadingCache<File, ShuffleDigestInformation> shuffleDigestCache;
 
   // Single-threaded Java executor used to perform expensive recursive directory deletion.
   private final Executor directoryCleaner;
@@ -110,15 +107,12 @@ public class ExternalShuffleBlockResolver {
       Executor directoryCleaner) throws IOException {
     this.conf = conf;
     this.registeredExecutorFile = registeredExecutorFile;
-    digestEnable = Boolean.parseBoolean(conf.get("spark.shuffle.digest.enable", "false"));
     String indexCacheSize = conf.get("spark.shuffle.service.index.cache.size", "100m");
-    String digestAlgorithm = conf.get("spark.shuffle.digest.codec", "crc32");
-    logger.info("NESPARK-160: ExternalShuffleService digestEnable is " + digestEnable + "" +
-            "\tand digestAlgorithm is " + digestAlgorithm);
+    String digestCacheSize = conf.get("spark.shuffle.service.digest.cache.size", "100m");
     CacheLoader<File, ShuffleIndexInformation> indexCacheLoader =
         new CacheLoader<File, ShuffleIndexInformation>() {
           public ShuffleIndexInformation load(File file) throws IOException {
-            return new ShuffleIndexInformation(file, digestEnable, digestAlgorithm);
+            return new ShuffleIndexInformation(file);
           }
         };
     shuffleIndexCache = CacheBuilder.newBuilder()
@@ -129,6 +123,21 @@ public class ExternalShuffleBlockResolver {
         }
       })
       .build(indexCacheLoader);
+
+    CacheLoader<File, ShuffleDigestInformation> digestCacheLoader =
+            new CacheLoader<File, ShuffleDigestInformation>() {
+              public ShuffleDigestInformation load(File file) throws IOException {
+                return new ShuffleDigestInformation(file);
+              }
+            };
+    shuffleDigestCache = CacheBuilder.newBuilder()
+            .maximumWeight(JavaUtils.byteStringAsBytes(digestCacheSize))
+            .weigher(new Weigher<File, ShuffleDigestInformation>() {
+              public int weigh(File file, ShuffleDigestInformation indexInfo) {
+                return indexInfo.getSize();
+              }
+            })
+            .build(digestCacheLoader);
     db = LevelDBProvider.initLevelDB(this.registeredExecutorFile, CURRENT_VERSION, mapper);
     if (db != null) {
       executors = reloadRegisteredExecutors(db);
@@ -244,18 +253,22 @@ public class ExternalShuffleBlockResolver {
     ExecutorShuffleInfo executor, int shuffleId, int mapId, int reduceId) {
     File indexFile = getFile(executor.localDirs, executor.subDirsPerLocalDir,
       "shuffle_" + shuffleId + "_" + mapId + "_0.index");
+    File digestFile = getFile(executor.localDirs, executor.subDirsPerLocalDir,
+            "shuffle_" + shuffleId + "_" + mapId + "_0.digest");
 
     try {
       ShuffleIndexInformation shuffleIndexInformation = shuffleIndexCache.get(indexFile);
       ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(reduceId);
-      if (digestEnable) {
+      if (digestFile != null && digestFile.exists() && digestFile.length() > 0) {
+        ShuffleDigestInformation shuffleDigestInformation = shuffleDigestCache.get(digestFile);
+        ShuffleDigestRecord shuffleDigestRecord = shuffleDigestInformation.getDigest(reduceId);
         return new DigestFileSegmentManagedBuffer(
                 conf,
                 getFile(executor.localDirs, executor.subDirsPerLocalDir,
                         "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
                 shuffleIndexRecord.getOffset(),
                 shuffleIndexRecord.getLength(),
-                Unpooled.wrappedBuffer(shuffleIndexRecord.getDigest()));
+                shuffleDigestRecord.getDigestBuf());
       } else {
         return new FileSegmentManagedBuffer(
                 conf,
@@ -265,7 +278,7 @@ public class ExternalShuffleBlockResolver {
                 shuffleIndexRecord.getLength());
       }
     } catch (ExecutionException e) {
-      throw new RuntimeException("Failed to open file: " + indexFile, e);
+      throw new RuntimeException("Failed to open file: " + indexFile + " or " + digestFile, e);
     }
   }
 

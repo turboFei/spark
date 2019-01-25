@@ -67,6 +67,11 @@ private[spark] class IndexShuffleBlockResolver(
     blockManager.diskBlockManager.getFile(ShuffleIndexBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
 
+  private def getDigestFile(shuffleId: Int, mapId: Int): File = {
+    blockManager.diskBlockManager.getFile(
+      "shuffle_" + shuffleId + "_" + mapId + "_0.digest")
+  }
+
   /**
    * Remove data file and index file that contain the output data from one map.
    */
@@ -92,8 +97,7 @@ private[spark] class IndexShuffleBlockResolver(
    */
   private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
     // the index file should have `block + 1` longs as offset.
-    if ((!digestEnable && index.length() != (blocks + 1) * 8L) ||
-      (digestEnable && index.length() != 8L + blocks * (digestLength + 8L))) {
+    if (index.length() != (blocks + 1) * 8L) {
       return null
     }
     val lengths = new Array[Long](blocks)
@@ -130,6 +134,122 @@ private[spark] class IndexShuffleBlockResolver(
     } else {
       null
     }
+  }
+
+  private def checkDigestAndDataFile(digestFile: File, digests: Array[Array[Byte]],
+                                     blocks: Int): Array[Array[Byte]] = {
+    // the digestFile should has 3 bytes to mark the digest codec,
+    // such as crc or md5, then are numPartitions * digest
+    if (digestFile.length() != (blocks * digestLength + 3)) {
+      return null
+    }
+    val digestsArr = new Array[Array[Byte]](blocks)
+    // Read the lengths of blocks
+    val in = try {
+      new DataInputStream(new NioBufferedFileInputStream(digestFile))
+    } catch {
+      case e: IOException =>
+        return null
+    }
+    try {
+      // check the codec and digest algorithm
+      val codecBytes = new  Array[Byte](3)
+      in.readFully(codecBytes)
+      val codec = new String(codecBytes)
+      if (!codec.equals(DigestUtils.getAlgorithmString(algorithm))) {
+        return null
+      }
+
+      var i = 0
+      while (i < blocks) {
+        val tempBytes = new Array[Byte](digestLength)
+        in.readFully(tempBytes)
+        digestsArr(i) = tempBytes
+        i += 1
+      }
+    } catch {
+      case e: IOException =>
+        return null
+    } finally {
+      in.close()
+    }
+
+    // the size of data file should match with index file
+    if (!(0 until blocks).exists(i => !DigestUtils.digestEqual(digests(i), digestsArr(i)))) {
+      digestsArr
+    } else {
+      null
+    }
+  }
+
+  def writeDigestFile(
+      shuffleId: Int,
+      mapId: Int,
+      lengths: Array[Long],
+      dataFile: File): Unit = {
+    val digestFile = getDigestFile(shuffleId, mapId)
+    val digestTmp = Utils.tempFileWith(digestFile)
+    try {
+      val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(digestTmp)))
+      val in = if (dataFile != null && dataFile.exists()) {
+        new FileInputStream(dataFile)
+      } else {
+        null
+      }
+      val digests = new Array[Array[Byte]](lengths.length)
+      Utils.tryWithSafeFinally {
+        // write the codec of digest in the head, crc or md5, 3 bytes
+        out.writeBytes(DigestUtils.getAlgorithmString(algorithm))
+        for (i <- (0 until lengths.length)) {
+          val length = lengths(i)
+          if (length == 0 || in == null) {
+            val nullDigests = new Array[Byte](digestLength)
+            out.write(nullDigests)
+            digests(i) = nullDigests
+          } else {
+            try {
+              val digest = DigestUtils.digestWithAlogrithm(algorithm,
+                new LimitedInputStream(in, length))
+              out.write(digest)
+              digests(i) = digest
+            } catch {
+              case e: IOException =>
+                logError(s"NESPARK-160: error when make digest for $dataFile with " +
+                  s"algorithm $algorithm", e)
+            }
+          }
+        } {
+          if (in == null) {
+            in.close()
+          }
+          out.close()
+        }
+      }
+      synchronized {
+        val existingDigests = checkDigestAndDataFile(digestFile, digests, lengths.length)
+        if (existingDigests != null) {
+          // Another attempt for the same task has already written our map outputs successfully,
+          // so just use the existing partition lengths and delete our temporary map outputs.
+          System.arraycopy(existingDigests, 0, digests, 0, digests.length)
+          digestTmp.delete()
+        } else {
+          // This is the first successful attempt in writing the map outputs for this task,
+          // so override any existing index and data files with the ones we wrote.
+          if (digestFile.exists()) {
+            digestFile.delete()
+          }
+          if (!digestTmp.renameTo(digestFile)) {
+            throw new IOException("fail to rename file " + digestTmp + " to " + digestFile)
+          }
+        }
+      }
+
+    } finally {
+      if (digestTmp.exists() && !digestTmp.delete()) {
+        logError(s"Failed to delete temporary index file at ${digestTmp.getAbsolutePath}")
+      }
+    }
+
   }
 
   /**
@@ -191,45 +311,15 @@ private[spark] class IndexShuffleBlockResolver(
           if (dataTmp != null && dataTmp.exists() && !dataTmp.renameTo(dataFile)) {
             throw new IOException("fail to rename file " + dataTmp + " to " + dataFile)
           }
-          // Then write the digests
-          if (digestEnable && indexFile.exists()) {
-            val dataIn = if (dataFile != null && dataFile.exists()) {
-              new FileInputStream(dataFile)
-            } else {
-              null
-            }
-            val indexFileAppend = new DataOutputStream(new BufferedOutputStream(
-              new FileOutputStream(indexFile, true)))
-            Utils.tryWithSafeFinally {
-              val nullDigests = new Array[Byte](digestLength)
-              for (length <- lengths) {
-                if (dataIn == null || length == 0) {
-                  indexFileAppend.write(nullDigests)
-                } else {
-                  try {
-                    val digest = DigestUtils.digestWithAlogrithm(algorithm,
-                      new LimitedInputStream(dataIn, length))
-                    indexFileAppend.write(digest)
-                  } catch {
-                    case e: IOException =>
-                      logError(s"NESPARK-160: error when make digest for $dataFile with " +
-                        s"algorithm $algorithm", e)
-                  }
-                }
-              }
-            } {
-              if (dataIn != null) {
-                dataIn.close()
-              }
-              indexFileAppend.close()
-            }
-          }
         }
       }
     } finally {
       if (indexTmp.exists() && !indexTmp.delete()) {
         logError(s"Failed to delete temporary index file at ${indexTmp.getAbsolutePath}")
       }
+    }
+    if (digestEnable) {
+      writeDigestFile(shuffleId, mapId, lengths, getDataFile(shuffleId, mapId))
     }
   }
 
@@ -257,22 +347,12 @@ private[spark] class IndexShuffleBlockResolver(
           s"expected $expectedPosition but actual position was $actualPosition.")
       }
       if (digestEnable) {
-        val tempDigestBytes = new Array[Byte](digestLength)
-        val reducerNum = (indexFile.length() - 8) / (8 + digestLength)
-        channel.position((reducerNum + 1) * 8L + blockId.reduceId * digestLength)
-        in.readFully(tempDigestBytes)
-        val actualDigestPosition = channel.position()
-        val exceptedDigestPosition = (reducerNum + 1) * 8L + (blockId.reduceId + 1) * digestLength
-        if (actualDigestPosition != exceptedDigestPosition) {
-          throw new Exception(s"NESPARK-160: Incorrect channel position after md5 file reads: " +
-            s"expected $exceptedDigestPosition but actual position was $actualDigestPosition.")
-        }
         new DigestFileSegmentManagedBuffer(
           transportConf,
           getDataFile(blockId.shuffleId, blockId.mapId),
           offset,
           nextOffset - offset,
-          Unpooled.wrappedBuffer(tempDigestBytes))
+          Unpooled.wrappedBuffer(getDigest(blockId)))
       } else {
         new FileSegmentManagedBuffer(
           transportConf,
@@ -280,6 +360,25 @@ private[spark] class IndexShuffleBlockResolver(
           offset,
           nextOffset - offset)
       }
+    } finally {
+      in.close()
+    }
+  }
+   def getDigest(blockId: ShuffleBlockId): Array[Byte] = {
+    val digestFile = getDigestFile(blockId.shuffleId, blockId.mapId)
+    val channel = Files.newByteChannel(digestFile.toPath)
+    channel.position(blockId.reduceId * digestLength + 3L)
+    val in = new DataInputStream(Channels.newInputStream(channel))
+    try {
+      val digest = new Array[Byte](digestLength)
+      in.readFully(digest)
+      val actualPosition = channel.position()
+      val expectedPosition = (blockId.reduceId + 1) * digestLength + 3L
+      if (actualPosition != expectedPosition) {
+        throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
+          s"expected $expectedPosition but actual position was $actualPosition.")
+      }
+      digest
     } finally {
       in.close()
     }

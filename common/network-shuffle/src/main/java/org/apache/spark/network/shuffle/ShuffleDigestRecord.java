@@ -17,24 +17,22 @@
 
 package org.apache.spark.network.shuffle;
 
+import io.netty.buffer.ByteBuf;
+import io.netty.buffer.Unpooled;
+
 /**
  * Contains offset and length of the shuffle block data.
  */
-public class ShuffleIndexRecord {
-  private final long offset;
-  private final long length;
+public class ShuffleDigestRecord {
+  private final ByteBuf digestBuf;
 
-  public ShuffleIndexRecord(long offset, long length) {
-    this.offset = offset;
-    this.length = length;
+  public ShuffleDigestRecord(byte[] digest) {
+    this.digestBuf = Unpooled.wrappedBuffer(digest);
   }
 
-  public long getOffset() {
-    return offset;
-  }
 
-  public long getLength() {
-    return length;
+  public ByteBuf getDigestBuf() {
+    return digestBuf;
   }
 }
 
