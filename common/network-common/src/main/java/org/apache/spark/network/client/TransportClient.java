@@ -151,7 +151,7 @@ public class TransportClient implements Closeable {
 
     StreamChunkId streamChunkId = new StreamChunkId(streamId, chunkIndex);
     handler.addFetchRequest(streamChunkId, callback);
-
+    logger.info("NESPARK-160: for fetchChunk digestEnable " + digestEnable);
     channel.writeAndFlush(digestEnable ? new DigestChunkFetchRequest(streamChunkId) :
             new ChunkFetchRequest(streamChunkId)).addListener(future -> {
       if (future.isSuccess()) {
@@ -192,6 +192,7 @@ public class TransportClient implements Closeable {
     // when responses arrive.
     synchronized (this) {
       handler.addStreamCallback(streamId, callback);
+      logger.info("NESPARK-160: for stream digestEnable " + digestEnable);
       channel.writeAndFlush(digestEnable ? new DigestStreamRequest(streamId) :
               new StreamRequest(streamId)).addListener(future -> {
         if (future.isSuccess()) {

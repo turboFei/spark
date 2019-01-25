@@ -167,6 +167,7 @@ public class TransportContext {
   private TransportChannelHandler createChannelHandler(Channel channel, RpcHandler rpcHandler) {
     TransportResponseHandler responseHandler = new TransportResponseHandler(channel);
     TransportClient client = new TransportClient(channel, responseHandler, conf.shuffleDigestEnable());
+    logger.info("NESPARK-160: TransportClient digestEnable is " + conf.shuffleDigestEnable() );
     TransportRequestHandler requestHandler = new TransportRequestHandler(channel, client,
       rpcHandler, conf.maxChunksBeingTransferred());
     return new TransportChannelHandler(client, responseHandler, requestHandler,
