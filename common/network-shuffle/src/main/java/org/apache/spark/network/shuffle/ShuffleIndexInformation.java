@@ -17,7 +17,6 @@
 
 package org.apache.spark.network.shuffle;
 
-import io.netty.buffer.Unpooled;
 import org.apache.spark.network.util.DigestUtils;
 
 import java.io.DataInputStream;

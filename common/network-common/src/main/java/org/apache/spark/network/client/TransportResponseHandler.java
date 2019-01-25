@@ -33,9 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import org.apache.spark.network.protocol.ChunkFetchFailure;
 import org.apache.spark.network.protocol.ChunkFetchSuccess;
-import org.apache.spark.network.protocol.DigestChunkFetchFailure;
 import org.apache.spark.network.protocol.DigestChunkFetchSuccess;
-import org.apache.spark.network.protocol.DigestStreamFailure;
 import org.apache.spark.network.protocol.DigestStreamResponse;
 import org.apache.spark.network.protocol.ResponseMessage;
 import org.apache.spark.network.protocol.RpcFailure;
@@ -268,17 +266,6 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         resp.body().release();
         resp.digestBuf.release();
       }
-    } else if (message instanceof DigestChunkFetchFailure) {
-      DigestChunkFetchFailure resp = (DigestChunkFetchFailure) message;
-      ChunkReceivedCallback listener = outstandingFetches.get(resp.streamChunkId);
-      if (listener == null) {
-        logger.warn("Ignoring response for block {} from {} ({}) since it is not outstanding",
-                resp.streamChunkId, getRemoteAddress(channel), resp.errorString);
-      } else {
-        outstandingFetches.remove(resp.streamChunkId);
-        listener.onFailure(resp.streamChunkId.chunkIndex, new ChunkFetchFailureException(
-                "Failure while fetching " + resp.streamChunkId + ": " + resp.errorString));
-      }
     } else if (message instanceof DigestStreamResponse) {
       DigestStreamResponse resp = (DigestStreamResponse) message;
       Pair<String, StreamCallback> entry = streamCallbacks.poll();
@@ -311,19 +298,6 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
       } else {
         logger.error("Could not find callback for StreamResponse.");
         resp.digestBuf.release();
-      }
-    } else if (message instanceof DigestStreamFailure) {
-      DigestStreamFailure resp = (DigestStreamFailure) message;
-      Pair<String, StreamCallback> entry = streamCallbacks.poll();
-      if (entry != null) {
-        StreamCallback callback = entry.getValue();
-        try {
-          callback.onFailure(resp.streamId, new RuntimeException(resp.error));
-        } catch (IOException ioe) {
-          logger.warn("Error in stream failure handler.", ioe);
-        }
-      } else {
-        logger.warn("Stream failure with unknown callback: {}", resp.error);
       }
     } else {
       throw new IllegalStateException("Unknown response type: " + message.type());

@@ -36,14 +36,6 @@ public final class DigestStreamResponse extends AbstractResponseMessage {
   public final ByteBuf digestBuf;
   public final int digestLength;
 
-  public DigestStreamResponse(String streamId, long byteCount, ManagedBuffer buffer) {
-    super(buffer, false);
-    this.streamId = streamId;
-    this.byteCount = byteCount;
-    this.digestLength = 0;
-    this.digestBuf = Unpooled.buffer(0);
-  }
-
   public DigestStreamResponse(String streamId, long byteCount, ManagedBuffer buffer, ByteBuf digestBuf) {
     super(buffer, false);
     this.streamId = streamId;
@@ -71,7 +63,7 @@ public final class DigestStreamResponse extends AbstractResponseMessage {
 
   @Override
   public ResponseMessage createFailureResponse(String error) {
-    return new DigestStreamFailure(streamId, error);
+    return new StreamFailure(streamId, error);
   }
 
   public static DigestStreamResponse decode(ByteBuf buf) {

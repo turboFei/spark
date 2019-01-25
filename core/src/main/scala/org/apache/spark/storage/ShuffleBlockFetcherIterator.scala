@@ -473,6 +473,8 @@ final class ShuffleBlockFetcherIterator(
                     break()
                   }
                 }
+                logInfo(s"NESPARK-160: the check is passed and origin digest " +
+                s"${DigestUtils.encodeHex(checkDigest)}")
                 // reset the inputStream, for the unSupported inputStream, recreate it
                 if (in.markSupported()) {
                   in.reset()

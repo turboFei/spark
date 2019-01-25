@@ -113,6 +113,8 @@ public class ExternalShuffleBlockResolver {
     digestEnable = Boolean.parseBoolean(conf.get("spark.shuffle.digest.enable", "false"));
     String indexCacheSize = conf.get("spark.shuffle.service.index.cache.size", "100m");
     String digestAlgorithm = conf.get("spark.shuffle.digest.codec", "crc32");
+    logger.info("NESPARK-160: ExternalShuffleService digestEnable is " + digestEnable + "" +
+            "\tand digestAlgorithm is " + digestAlgorithm);
     CacheLoader<File, ShuffleIndexInformation> indexCacheLoader =
         new CacheLoader<File, ShuffleIndexInformation>() {
           public ShuffleIndexInformation load(File file) throws IOException {

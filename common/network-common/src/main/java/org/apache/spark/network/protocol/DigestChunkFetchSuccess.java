@@ -36,14 +36,6 @@ public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
   public final ByteBuf digestBuf;
   public final int digestLength;
 
-
-  public DigestChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer) {
-    super(buffer, true);
-    this.streamChunkId = streamChunkId;
-    this.digestBuf = Unpooled.buffer(0);
-    this.digestLength = 0;
-  }
-
   public DigestChunkFetchSuccess(StreamChunkId streamChunkId, ManagedBuffer buffer, ByteBuf digestBuf) {
     super(buffer, true);
     this.streamChunkId = streamChunkId;
@@ -69,7 +61,7 @@ public final class DigestChunkFetchSuccess extends AbstractResponseMessage {
 
   @Override
   public ResponseMessage createFailureResponse(String error) {
-    return new DigestChunkFetchFailure(streamChunkId, error);
+    return new ChunkFetchFailure(streamChunkId, error);
   }
 
   /** Decoding uses the given ByteBuf as our data, and will retain() it. */
