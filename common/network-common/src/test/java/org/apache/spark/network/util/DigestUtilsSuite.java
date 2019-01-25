@@ -33,11 +33,11 @@ public class DigestUtilsSuite {
         DigestUtils.ALGORITHM md5 = DigestUtils.getAlgorithm("md5");
         assertEquals(md5, DigestUtils.ALGORITHM.MD5);
 
-        DigestUtils.ALGORITHM crc32 = DigestUtils.getAlgorithm("crc32");
-        assertEquals(crc32, DigestUtils.ALGORITHM.CRC32);
+        DigestUtils.ALGORITHM crc32 = DigestUtils.getAlgorithm("crc");
+        assertEquals(crc32, DigestUtils.ALGORITHM.CRC);
 
         DigestUtils.ALGORITHM other = DigestUtils.getAlgorithm("other");
-        assertEquals(other, DigestUtils.ALGORITHM.CRC32);
+        assertEquals(other, DigestUtils.ALGORITHM.CRC);
 
         byte[] digest1 = new byte[10];
         byte[] digest2 = new byte[20];
@@ -51,7 +51,7 @@ public class DigestUtilsSuite {
         assertTrue(DigestUtils.digestEqual(digest1, digest3));
 
         String testForDigest = "testForDigestLength";
-        String[] codecs = {"crc32", "md5"};
+        String[] codecs = {"crc", "md5"};
         for (String codec : codecs) {
             try(InputStream in = new ByteArrayInputStream(testForDigest.getBytes())) {
                 assertTrue(DigestUtils.digestWithAlogrithm(codec, in).length ==
