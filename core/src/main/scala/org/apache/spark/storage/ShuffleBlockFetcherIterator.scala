@@ -433,7 +433,14 @@ final class ShuffleBlockFetcherIterator(
                 assert(buf.isInstanceOf[FileSegmentManagedBuffer])
                 logError("Failed to create input stream from local block", e)
                 buf.release()
-                throwFetchFailedException(blockId, address, e)
+                if (address != blockManager.blockManagerId && !corruptedBlocks.contains(blockId)) {
+                  corruptedBlocks.add(blockId)
+                  fetchRequests += FetchRequest(address, Array((blockId, size)))
+                  result = null
+                  break()
+                } else {
+                  throwFetchFailedException(blockId, address, e)
+                }
             }
 
             // detect inputStream  corrupt
@@ -449,14 +456,14 @@ final class ShuffleBlockFetcherIterator(
                     throwFetchFailedException(blockId, address, e)
                 }
 
-                if (DigestUtils.digestEqual(digestBuf.array(), checkDigest)) {
+                if (!DigestUtils.digestEqual(digestBuf.array(), checkDigest)) {
                   buf.release()
                   // release the digest bytebuf
                   digestBuf.release()
                   val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest " +
                     s"${DigestUtils.encodeHex(checkDigest)} of $blockId is not equal with orgin " +
                     s"${DigestUtils.encodeHex(digestBuf.array())}")
-                  if (!corruptedBlocks.contains(blockId)) {
+                  if (corruptedBlocks.contains(blockId)) {
                     throwFetchFailedException(blockId, address, e)
                   } else {
                     logError("The md5 of read data error and fetch again", e)
