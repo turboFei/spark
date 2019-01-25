@@ -218,12 +218,12 @@ private[spark] class IndexShuffleBlockResolver(
                   s"algorithm $algorithm", e)
             }
           }
-        } {
-          if (in == null) {
-            in.close()
-          }
-          out.close()
         }
+      } {
+        if (in == null) {
+          in.close()
+        }
+        out.close()
       }
       synchronized {
         val existingDigests = checkDigestAndDataFile(digestFile, digests, lengths.length)
