@@ -68,8 +68,7 @@ private[spark] class IndexShuffleBlockResolver(
   }
 
   private def getDigestFile(shuffleId: Int, mapId: Int): File = {
-    blockManager.diskBlockManager.getFile(
-      "shuffle_" + shuffleId + "_" + mapId + "_0.digest")
+    blockManager.diskBlockManager.getFile(ShuffleDigestBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
   }
 
   /**
