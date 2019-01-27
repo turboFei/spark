@@ -219,7 +219,7 @@ private[spark] class IndexShuffleBlockResolver(
           }
         }
       } {
-        if (in == null) {
+        if (in != null) {
           in.close()
         }
         out.close()
