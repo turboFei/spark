@@ -74,7 +74,7 @@ public class ShuffleDigestInformation {
       digestsBuffer.position(reduceId * digestLength);
       digestsBuffer.get(digest);
     } catch (IllegalArgumentException e) {
-      logger.info("NESPARK-160: IllegalArgumentException in getDigest");
+      logger.info("NESPARK-160: IllegalArgumentException in getDigest and length is " + digestLength);
       digest = new byte[0];
     }
 
