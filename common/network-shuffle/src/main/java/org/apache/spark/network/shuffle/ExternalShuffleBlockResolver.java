@@ -259,7 +259,7 @@ public class ExternalShuffleBlockResolver {
     try {
       ShuffleIndexInformation shuffleIndexInformation = shuffleIndexCache.get(indexFile);
       ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(reduceId);
-      if (digestFile != null && digestFile.exists() && digestFile.length() > 0) {
+      if (digestFile != null && digestFile.exists()) {
         ShuffleDigestInformation shuffleDigestInformation = shuffleDigestCache.get(digestFile);
         ShuffleDigestRecord shuffleDigestRecord = shuffleDigestInformation.getDigest(reduceId);
         return new DigestFileSegmentManagedBuffer(
