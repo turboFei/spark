@@ -443,6 +443,8 @@ final class ShuffleBlockFetcherIterator(
                 }
             }
 
+            // flag to mark the inputStream whether has been checked by digest
+            var hasDigestCheck = false
             // detect inputStream  corrupt
             if (digestEnable) {
               if (digestBuf.readableBytes() > 0) {
@@ -481,6 +483,7 @@ final class ShuffleBlockFetcherIterator(
                 } else {
                   in = buf.createInputStream()
                 }
+                hasDigestCheck = true
               } else {
                 logDebug(s"NESPARK-160: the digest for address: ${address.host} and blockID:" +
                   s"$blockId is null, local address is ${blockManager.blockManagerId.host}")
@@ -492,7 +495,7 @@ final class ShuffleBlockFetcherIterator(
             // If digestEnable is false, fallback to the origin detect corrupt policy
             // Only copy the stream if it's wrapped by compression or encryption, also the size of
             // block is small (the decompressed block is smaller than maxBytesInFlight)
-            if (!digestEnable && detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
+            if (!hasDigestCheck && detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
               val originalInput = input
               val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
               try {

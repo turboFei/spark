@@ -18,6 +18,8 @@
 package org.apache.spark.network.shuffle;
 
 import org.apache.spark.network.util.DigestUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.DataInputStream;
 import java.io.File;
@@ -31,6 +33,8 @@ import java.nio.file.Files;
  * as an in-memory LongBuffer.
  */
 public class ShuffleDigestInformation {
+  private static final Logger logger = LoggerFactory.getLogger(ShuffleDigestInformation.class);
+
   /** offsets as long buffer */
   private final ByteBuffer digestsBuffer;
   private final int digestLength;
@@ -66,8 +70,14 @@ public class ShuffleDigestInformation {
    */
   public ShuffleDigestRecord getDigest(int reduceId) {
     byte[] digest = new byte[digestLength];
-    digestsBuffer.position(reduceId * digestLength);
-    digestsBuffer.get(digest);
+    try {
+      digestsBuffer.position(reduceId * digestLength);
+      digestsBuffer.get(digest);
+    } catch (IllegalArgumentException e) {
+      logger.info("NESPARK-160: IllegalArgumentException in getDigest");
+      digest = new byte[0];
+    }
+
     return new ShuffleDigestRecord(digest);
   }
 }
