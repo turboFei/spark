@@ -20,7 +20,9 @@ package org.apache.spark.storage
 import java.io.{IOException, InputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
+
 import javax.annotation.concurrent.GuardedBy
+import org.apache.spark.executor.{ShuffleReadMetrics, TempShuffleReadMetrics}
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
@@ -70,7 +72,8 @@ final class ShuffleBlockFetcherIterator(
     maxBlocksInFlightPerAddress: Int,
     maxReqSizeShuffleToMem: Long,
     detectCorrupt: Boolean,
-    digestEnable: Boolean = false)
+    digestEnable: Boolean = false,
+    shuffleReadMetrics: TempShuffleReadMetrics = null)
   extends Iterator[(BlockId, InputStream)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._
@@ -443,6 +446,7 @@ final class ShuffleBlockFetcherIterator(
             // detect inputStream  corrupt
             if (digestEnable) {
               if (digest >= 0) {
+                val digestStartTime = System.nanoTime()
                 val checkDigest = try {
                   DigestUtils.getDigest(in)
                 } catch {
@@ -451,10 +455,12 @@ final class ShuffleBlockFetcherIterator(
                     buf.release()
                     throwFetchFailedException(blockId, address, e)
                 }
+                if (shuffleReadMetrics != null) {
+                  shuffleReadMetrics.incReadDigestTime(System.nanoTime() - digestStartTime)
+                }
 
                 if (digest != checkDigest) {
                   buf.release()
-                  // release the digest bytebuf
                   val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest " +
                     s"$checkDigest of $blockId is not equal with orgin $digest")
                   if (corruptedBlocks.contains(blockId)) {
