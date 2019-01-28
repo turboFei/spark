@@ -27,7 +27,7 @@ import javax.annotation.concurrent.GuardedBy
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 import scala.util.control.Breaks._
-import org.apache.spark.{SparkException, TaskContext}
+import org.apache.spark.{SparkException, TaskContext, TaskContextImpl}
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle._
@@ -467,7 +467,8 @@ final class ShuffleBlockFetcherIterator(
                     s"${DigestUtils.encodeHex(checkDigest)} of $blockId is not equal with orgin " +
                     s"${DigestUtils.encodeHex(digestBuf.array())}")
                   if (corruptedBlocks.contains(blockId)) {
-                    throwFetchFailedException(blockId, address, e)
+                    // mark the task as failed
+                    TaskContext.get().asInstanceOf[TaskContextImpl].markTaskFailed(e)
                   } else {
                     logError("The md5 of read data error and fetch again", e)
                     corruptedBlocks += blockId
