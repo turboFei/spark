@@ -23,10 +23,12 @@ package org.apache.spark.network.shuffle;
 public class ShuffleIndexRecord {
   private final long offset;
   private final long length;
+  private final long digest;
 
-  public ShuffleIndexRecord(long offset, long length) {
+  public ShuffleIndexRecord(long offset, long length, long digest) {
     this.offset = offset;
     this.length = length;
+    this.digest = digest;
   }
 
   public long getOffset() {
@@ -35,6 +37,10 @@ public class ShuffleIndexRecord {
 
   public long getLength() {
     return length;
+  }
+
+  public long getDigest() {
+    return digest;
   }
 }
 

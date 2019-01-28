@@ -1,49 +1,45 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements.  See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package org.apache.spark.network.util;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.util.HashMap;
 import java.util.zip.CRC32;
 
 public class DigestUtils {
     private static final int STREAM_BUFFER_LENGTH = 2048;
-    private static final HashMap<ALGORITHM, Integer> ALOGRITHMS_LENGTH;
-    private static final char[] DIGITS_LOWWER;
+    private static final int DIGEST_LENGTH = 8;
 
-    public enum ALGORITHM {
-        CRC, MD5
-    }
-
-    public static int getDigestLength(String algorithm) {
-       return ALOGRITHMS_LENGTH.get(getAlgorithm(algorithm));
-    }
-
-    static {
-        ALOGRITHMS_LENGTH = new HashMap<>(2);
-        ALOGRITHMS_LENGTH.put(ALGORITHM.MD5, 16);
-        ALOGRITHMS_LENGTH.put(ALGORITHM.CRC, 8);
-        DIGITS_LOWWER = new char[]{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'a', 'b', 'c', 'd', 'e', 'f'};
-
+    public static int getDigestLength() {
+       return DIGEST_LENGTH;
     }
 
     public DigestUtils() {
     }
 
-    private static byte[] digest(MessageDigest digest, InputStream data) throws IOException {
-        return updateDigest(digest, data).digest();
+    public static long getDigest(InputStream data) throws IOException {
+        return updateCRC32(getCRC32(), data);
     }
 
-    public static MessageDigest updateDigest(MessageDigest digest, InputStream data) throws IOException {
-        byte[] buffer = new byte[STREAM_BUFFER_LENGTH];
-
-        for(int read = data.read(buffer, 0, STREAM_BUFFER_LENGTH); read > -1;
-            read = data.read(buffer, 0, STREAM_BUFFER_LENGTH)) {
-            digest.update(buffer, 0, read);
-        }
-        return digest;
+    public static CRC32 getCRC32() {
+        return new CRC32();
     }
+
     public static long updateCRC32(CRC32 crc32, InputStream data) throws IOException {
         byte[] buffer = new byte[STREAM_BUFFER_LENGTH];
         for(int read = data.read(buffer, 0, STREAM_BUFFER_LENGTH); read > -1;
@@ -52,100 +48,4 @@ public class DigestUtils {
         }
         return crc32.getValue();
     }
-
-
-    public static byte[] md5(InputStream data) throws IOException {
-        return digest(getMd5Digest(), data);
-    }
-
-    public static byte[] crc32(InputStream data) throws IOException {
-        return LongToBytes(updateCRC32(getCRC32(), data));
-    }
-
-    public static ALGORITHM getAlgorithm(String algorithm) {
-        if (algorithm.toLowerCase().startsWith("md5")) {
-            return ALGORITHM.MD5;
-        } else {
-            return ALGORITHM.CRC;
-        }
-    }
-
-    public static String getAlgorithmString(String algorithm) {
-        switch (getAlgorithm(algorithm)) {
-            case MD5:
-                return "md5";
-            default:
-                return "crc";
-        }
-    }
-
-    public static byte[] digestWithAlogrithm(String algorithm, InputStream data) throws  IOException {
-        switch (getAlgorithm(algorithm)) {
-            case MD5:
-                return  md5(data);
-            default:
-                return crc32(data);
-        }
-    }
-
-    public static MessageDigest getMd5Digest() {
-        return getDigest("MD5");
-    }
-
-    public static CRC32 getCRC32() {
-        return new CRC32();
-    }
-
-    public static MessageDigest getDigest(String algorithm) {
-        try {
-            return MessageDigest.getInstance(algorithm);
-        } catch (NoSuchAlgorithmException var2) {
-            throw new IllegalArgumentException(var2);
-        }
-    }
-
-    public static byte[] LongToBytes(long values) {
-        byte[] buffer = new byte[8];
-        for (int i = 0; i < 8; i++) {
-            int offset = 64 - (i + 1) * 8;
-            buffer[i] = (byte) ((values >> offset) & 0xff);
-        }
-        return buffer;
-    }
-
-    public static boolean digestEqual(byte[] digesta, byte[] digestb) {
-            if (digesta == digestb) return true;
-            if (digesta == null || digestb == null) {
-                return false;
-            }
-            if (digesta.length != digestb.length) {
-                return false;
-            }
-
-            int result = 0;
-            // time-constant comparison
-            for (int i = 0; i < digesta.length; i++) {
-                result |= digesta[i] ^ digestb[i];
-            }
-            return result == 0;
-
-    }
-
-    public static String encodeHex(byte[] data) {
-        return new String(encodeHex(data, DIGITS_LOWWER));
-    }
-
-    protected static char[] encodeHex(byte[] data, char[] toDigits) {
-        int l = data.length;
-        char[] out = new char[l << 1];
-        int i = 0;
-
-        for(int var5 = 0; i < l; ++i) {
-            out[var5++] = toDigits[(240 & data[i]) >>> 4];
-            out[var5++] = toDigits[15 & data[i]];
-        }
-
-        return out;
-    }
-
 }

@@ -19,9 +19,7 @@ package org.apache.spark.network.buffer;
 
 import com.google.common.base.Objects;
 import com.google.common.io.ByteStreams;
-import io.netty.buffer.ByteBuf;
 import io.netty.channel.DefaultFileRegion;
-import org.apache.spark.network.util.DigestUtils;
 import org.apache.spark.network.util.JavaUtils;
 import org.apache.spark.network.util.LimitedInputStream;
 import org.apache.spark.network.util.TransportConf;
@@ -39,14 +37,14 @@ public final class DigestFileSegmentManagedBuffer extends ManagedBuffer {
   private final File file;
   private final long offset;
   private final long length;
-  private final ByteBuf digestBuf;
+  private final long digest;
 
-  public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, ByteBuf digestBuf) {
+  public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, Long digest) {
     this.conf = conf;
     this.file = file;
     this.offset = offset;
     this.length = length;
-    this.digestBuf = digestBuf;
+    this.digest = digest;
   }
 
   @Override
@@ -55,8 +53,8 @@ public final class DigestFileSegmentManagedBuffer extends ManagedBuffer {
   }
 
 
-  public ByteBuf getDigestBuf() {
-    return digestBuf;
+  public long getDigest() {
+    return digest;
   }
 
   @Override
@@ -154,7 +152,7 @@ public final class DigestFileSegmentManagedBuffer extends ManagedBuffer {
       .add("file", file)
       .add("offset", offset)
       .add("length", length)
-      .add("digestHex", DigestUtils.encodeHex(digestBuf.array()))
+      .add("digest", digest)
       .toString();
   }
 }

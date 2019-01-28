@@ -139,7 +139,6 @@ class IndexShuffleBlockResolverSuite extends SparkFunSuite with BeforeAndAfterEa
   test("NESPARK-160: check the digest when digest is enable") {
     for (codec <- Array("md5", "crc32")) {
       conf.set("spark.shuffle.digest.enable", "true")
-      conf.set("spark.shuffle.digest.codec", codec)
       val resolver = new IndexShuffleBlockResolver(conf, blockManager)
       val lengths = Array[Long](10, 0, 20)
       val dataTmp = File.createTempFile("shuffle", null, tempDir)
@@ -152,8 +151,7 @@ class IndexShuffleBlockResolverSuite extends SparkFunSuite with BeforeAndAfterEa
       resolver.writeIndexFileAndCommit(1, 2, lengths, dataTmp)
       val managedBuffer = resolver.getBlockData(ShuffleBlockId(1, 2, 0))
       assert(managedBuffer.isInstanceOf[DigestFileSegmentManagedBuffer])
-      assert(managedBuffer.asInstanceOf[DigestFileSegmentManagedBuffer].getDigestBuf.capacity()
-        == DigestUtils.getDigestLength(codec))
+      assert(managedBuffer.asInstanceOf[DigestFileSegmentManagedBuffer].getDigest > 0)
     }
   }
 

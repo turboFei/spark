@@ -19,9 +19,7 @@ package org.apache.spark.network.protocol;
 
 import com.google.common.base.Objects;
 import io.netty.buffer.ByteBuf;
-import io.netty.buffer.Unpooled;
 import org.apache.spark.network.buffer.ManagedBuffer;
-import org.apache.spark.network.util.DigestUtils;
 
 /**
  * Response to {@link StreamRequest} when the stream has been successfully opened.
@@ -33,15 +31,13 @@ import org.apache.spark.network.util.DigestUtils;
 public final class DigestStreamResponse extends AbstractResponseMessage {
   public final String streamId;
   public final long byteCount;
-  public final ByteBuf digestBuf;
-  public final int digestLength;
+  public final long digest;
 
-  public DigestStreamResponse(String streamId, long byteCount, ManagedBuffer buffer, ByteBuf digestBuf) {
+  public DigestStreamResponse(String streamId, long byteCount, ManagedBuffer buffer, long digest) {
     super(buffer, false);
     this.streamId = streamId;
     this.byteCount = byteCount;
-    this.digestBuf = digestBuf;
-    this.digestLength = digestBuf.readableBytes();
+    this.digest = digest;
   }
 
   @Override
@@ -49,7 +45,7 @@ public final class DigestStreamResponse extends AbstractResponseMessage {
 
   @Override
   public int encodedLength() {
-    return 8 + Encoders.Strings.encodedLength(streamId) + 4 + digestLength;
+    return 8 + Encoders.Strings.encodedLength(streamId) + 8;
   }
 
   /** Encoding does NOT include 'buffer' itself. See {@link MessageEncoder}. */
@@ -57,8 +53,7 @@ public final class DigestStreamResponse extends AbstractResponseMessage {
   public void encode(ByteBuf buf) {
     Encoders.Strings.encode(buf, streamId);
     buf.writeLong(byteCount);
-    buf.writeInt(digestLength);
-    buf.writeBytes(digestBuf.array());
+    buf.writeLong(digest);
   }
 
   @Override
@@ -69,26 +64,20 @@ public final class DigestStreamResponse extends AbstractResponseMessage {
   public static DigestStreamResponse decode(ByteBuf buf) {
     String streamId = Encoders.Strings.decode(buf);
     long byteCount = buf.readLong();
-    int digestLength = buf.readInt();
-    byte[] digest = new byte[digestLength];
-    buf.readBytes(digest);
-    ByteBuf digestBuf = Unpooled.wrappedBuffer(digest);
-    // retain the digestBuf, and should release it
-    digestBuf.retain();
-    return new DigestStreamResponse(streamId, byteCount, null, digestBuf);
+    long digest = buf.readLong();
+    return new DigestStreamResponse(streamId, byteCount, null, digest);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hashCode(byteCount, streamId, body(), digestLength, digestBuf);
+    return Objects.hashCode(byteCount, streamId, body(), digest);
   }
 
   @Override
   public boolean equals(Object other) {
     if (other instanceof DigestStreamResponse) {
       DigestStreamResponse o = (DigestStreamResponse) other;
-      return byteCount == o.byteCount && streamId.equals(o.streamId)
-              && digestLength == o.digestLength && DigestUtils.digestEqual(digestBuf.array(), o.digestBuf.array());
+      return byteCount == o.byteCount && streamId.equals(o.streamId) && digest == o.digest;
     }
     return false;
   }
@@ -98,8 +87,7 @@ public final class DigestStreamResponse extends AbstractResponseMessage {
     return Objects.toStringHelper(this)
       .add("streamId", streamId)
       .add("byteCount", byteCount)
-      .add("digestLength", digestLength)
-      .add("digestHex", DigestUtils.encodeHex(digestBuf.array()))
+      .add("digest", digest)
       .add("body", body())
       .toString();
   }

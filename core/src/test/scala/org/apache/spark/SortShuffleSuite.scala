@@ -91,7 +91,7 @@ class SortShuffleSuite extends ShuffleSuite with BeforeAndAfterAll {
     // Ensure that the shuffle actually created files that will need to be cleaned up
     val filesCreatedByShuffle = getAllFiles -- filesBeforeShuffle
     filesCreatedByShuffle.map(_.getName) should be
-    Set("shuffle_0_0_0.data", "shuffle_0_0_0.index", "shuffle_0_0_0.digest")
+    Set("shuffle_0_0_0.data", "shuffle_0_0_0.index")
     // Check that the cleanup actually removes the files
     sc.env.blockManager.master.removeShuffle(0, blocking = true)
     for (file <- filesCreatedByShuffle) {

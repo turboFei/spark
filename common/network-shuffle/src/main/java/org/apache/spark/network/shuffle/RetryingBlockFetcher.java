@@ -26,7 +26,6 @@ import java.util.concurrent.TimeUnit;
 
 import com.google.common.collect.Sets;
 import com.google.common.util.concurrent.Uninterruptibles;
-import io.netty.buffer.ByteBuf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -207,7 +206,7 @@ public class RetryingBlockFetcher {
     }
 
     @Override
-    public void onBlockFetchSuccess(String blockId, ManagedBuffer data, ByteBuf digestBuf) {
+    public void onBlockFetchSuccess(String blockId, ManagedBuffer data, long digest) {
       // We will only forward this success message to our parent listener if this block request is
       // outstanding and we are still the active listener.
       boolean shouldForwardSuccess = false;
@@ -220,7 +219,7 @@ public class RetryingBlockFetcher {
 
       // Now actually invoke the parent listener, outside of the synchronized block.
       if (shouldForwardSuccess) {
-        listener.onBlockFetchSuccess(blockId, data, digestBuf);
+        listener.onBlockFetchSuccess(blockId, data, digest);
       }
     }
 

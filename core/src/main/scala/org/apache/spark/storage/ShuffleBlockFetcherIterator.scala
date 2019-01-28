@@ -20,8 +20,6 @@ package org.apache.spark.storage
 import java.io.{IOException, InputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
-
-import io.netty.buffer.{ByteBuf, Unpooled}
 import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.mutable
@@ -72,8 +70,7 @@ final class ShuffleBlockFetcherIterator(
     maxBlocksInFlightPerAddress: Int,
     maxReqSizeShuffleToMem: Long,
     detectCorrupt: Boolean,
-    digestEnable: Boolean = false,
-    digestAlgorithm: String = "crc")
+    digestEnable: Boolean = false)
   extends Iterator[(BlockId, InputStream)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._
@@ -232,7 +229,7 @@ final class ShuffleBlockFetcherIterator(
 
       // for the shuffle fetching listener, only need to implement onBlockFetchSuccess with digest
       override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer,
-          digestBuf: ByteBuf): Unit = {
+          digest: Long): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
         // i.e. cleanup() has not been called yet.
         ShuffleBlockFetcherIterator.this.synchronized {
@@ -240,10 +237,9 @@ final class ShuffleBlockFetcherIterator(
             // Increment the ref count because we need to pass this to a different thread.
             // This needs to be released after use.
             buf.retain()
-            digestBuf.retain()
             remainingBlocks -= blockId
             results.put(new SuccessFetchResult(BlockId(blockId), address, sizeMap(blockId), buf,
-              remainingBlocks.isEmpty, digestBuf))
+              remainingBlocks.isEmpty, digest))
             logDebug("remainingBlocks: " + remainingBlocks)
           }
         }
@@ -251,7 +247,7 @@ final class ShuffleBlockFetcherIterator(
       }
 
       override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
-        onBlockFetchSuccess(blockId, data, Unpooled.buffer(0))
+        onBlockFetchSuccess(blockId, data, -1L)
       }
 
       override def onBlockFetchFailure(blockId: String, e: Throwable): Unit = {
@@ -407,7 +403,7 @@ final class ShuffleBlockFetcherIterator(
       shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
       result match {
-        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone, digestBuf) =>
+        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone, digest) =>
           breakable {
             if (address != blockManager.blockManagerId) {
               numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
@@ -444,28 +440,23 @@ final class ShuffleBlockFetcherIterator(
                 }
             }
 
-            // flag to mark the inputStream whether has been checked by digest
-            var hasDigestCheck = false
             // detect inputStream  corrupt
             if (digestEnable) {
-              if (digestBuf.readableBytes() > 0) {
+              if (digest >= 0) {
                 val checkDigest = try {
-                  DigestUtils.digestWithAlogrithm(digestAlgorithm, in)
+                  DigestUtils.getDigest(in)
                 } catch {
                   case e: IOException =>
                     logError("NESPARK-160: error to check md5", e)
                     buf.release()
-                    digestBuf.release()
                     throwFetchFailedException(blockId, address, e)
                 }
 
-                if (!DigestUtils.digestEqual(digestBuf.array(), checkDigest)) {
+                if (digest != checkDigest) {
                   buf.release()
                   // release the digest bytebuf
-                  digestBuf.release()
                   val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest " +
-                    s"${DigestUtils.encodeHex(checkDigest)} of $blockId is not equal with orgin " +
-                    s"${DigestUtils.encodeHex(digestBuf.array())}")
+                    s"$checkDigest of $blockId is not equal with orgin $digest")
                   if (corruptedBlocks.contains(blockId)) {
                     // mark the task as failed
                     TaskContext.get().asInstanceOf[TaskContextImpl].markTaskFailed(e)
@@ -478,18 +469,16 @@ final class ShuffleBlockFetcherIterator(
                   }
                 }
                 logDebug(s"NESPARK-160: the check is passed and origin digest " +
-                s"${DigestUtils.encodeHex(checkDigest)}")
+                s"$checkDigest")
                 // reset the inputStream, for the unSupported inputStream, recreate it
                 if (in.markSupported()) {
                   in.reset()
                 } else {
                   in = buf.createInputStream()
                 }
-                hasDigestCheck = true
               } else {
                 logDebug(s"NESPARK-160: the digest for address: ${address.host} and blockID:" +
                   s"$blockId is null, local address is ${blockManager.blockManagerId.host}")
-                digestBuf.release();
               }
             }
 
@@ -497,7 +486,7 @@ final class ShuffleBlockFetcherIterator(
             // If digestEnable is false, fallback to the origin detect corrupt policy
             // Only copy the stream if it's wrapped by compression or encryption, also the size of
             // block is small (the decompressed block is smaller than maxBytesInFlight)
-            if (!hasDigestCheck && detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
+            if (!digestEnable && detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
               val originalInput = input
               val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
               try {
@@ -676,7 +665,7 @@ object ShuffleBlockFetcherIterator {
       size: Long,
       buf: ManagedBuffer,
       isNetworkReqDone: Boolean,
-      digestBuf: ByteBuf = Unpooled.buffer(0)) extends FetchResult {
+      digest: Long = -1L) extends FetchResult {
     require(buf != null)
     require(size >= 0)
   }

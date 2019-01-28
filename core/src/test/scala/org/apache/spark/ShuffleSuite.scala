@@ -406,9 +406,7 @@ abstract class ShuffleSuite extends SparkFunSuite with Matchers with LocalSparkC
   }
 
   test("NESPARK-160: shuffle with digest enable") {
-    for (codec <- Array("md5", "crc32")) {
       conf.set("spark.shuffle.digest.enable", "true")
-      conf.set("spark.shuffle.digest.codec", codec)
       val sc = new SparkContext("local", "test", conf)
       val numRecords = 10000
 
@@ -422,7 +420,6 @@ abstract class ShuffleSuite extends SparkFunSuite with Matchers with LocalSparkC
       assert(sum == (1 to numRecords).sum)
       sc.stop()
     }
-  }
 }
 
 /**

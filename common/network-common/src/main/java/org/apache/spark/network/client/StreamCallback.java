@@ -17,8 +17,6 @@
 
 package org.apache.spark.network.client;
 
-import io.netty.buffer.ByteBuf;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -37,7 +35,7 @@ public interface StreamCallback {
   /** Called when all data from the stream has been received. */
   void onComplete(String streamId) throws IOException;
 
-  default void onComplete(String streamId, ByteBuf digestBuf) throws IOException {
+  default void onComplete(String streamId, long digest) throws IOException {
     onComplete(streamId);
   }
 

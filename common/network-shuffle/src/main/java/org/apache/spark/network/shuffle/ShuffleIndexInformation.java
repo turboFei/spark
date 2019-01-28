@@ -31,21 +31,47 @@ import java.nio.file.Files;
 public class ShuffleIndexInformation {
   /** offsets as long buffer */
   private final LongBuffer offsets;
+  private final boolean hasDigest;
+  private final LongBuffer digests;
   private int size;
 
   public ShuffleIndexInformation(File indexFile) throws IOException {
-    size = (int)indexFile.length();
-    ByteBuffer buffer = ByteBuffer.allocate(size);
-    offsets = buffer.asLongBuffer();
+    ByteBuffer offsetsBuffer, digestsBuffer;
+    if (indexFile.length() % 8 == 0) {
+      hasDigest = false;
+      size = (int)indexFile.length();
+      offsetsBuffer = ByteBuffer.allocate(size);
+      offsets = offsetsBuffer.asLongBuffer();
+      digestsBuffer = ByteBuffer.allocate(0);
+      digests = digestsBuffer.asLongBuffer();
+    } else {
+      // this is a indexDigest file
+      hasDigest = true;
+      size = (int)indexFile.length() - 1;
+      // digest is a long value, length is 8
+      int blocks = (size - 8) / (8 + 8);
+      offsetsBuffer = ByteBuffer.allocate((blocks + 1) * 8);
+      offsets = offsetsBuffer.asLongBuffer();
+      digestsBuffer = ByteBuffer.allocate(blocks * 8);
+      digests = digestsBuffer.asLongBuffer();
+    }
     DataInputStream dis = null;
     try {
       dis = new DataInputStream(Files.newInputStream(indexFile.toPath()));
-      dis.readFully(buffer.array());
+      dis.readFully(offsetsBuffer.array());
+      dis.readFully(digestsBuffer.array());
     } finally {
       if (dis != null) {
         dis.close();
       }
     }
+  }
+
+  /**
+   * If this indexFile has digest
+   */
+  public boolean isHasDigest() {
+    return hasDigest;
   }
 
   /**
@@ -62,6 +88,7 @@ public class ShuffleIndexInformation {
   public ShuffleIndexRecord getIndex(int reduceId) {
     long offset = offsets.get(reduceId);
     long nextOffset = offsets.get(reduceId + 1);
-    return new ShuffleIndexRecord(offset, nextOffset - offset);
+    long digest = hasDigest ? digests.get(reduceId) : -1L;
+    return new ShuffleIndexRecord(offset, nextOffset - offset, digest);
   }
 }

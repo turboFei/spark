@@ -17,7 +17,6 @@
 
 package org.apache.spark.network.client;
 
-import io.netty.buffer.ByteBuf;
 import org.apache.spark.network.buffer.ManagedBuffer;
 
 /**
@@ -37,7 +36,7 @@ public interface ChunkReceivedCallback {
    */
   void onSuccess(int chunkIndex, ManagedBuffer buffer);
 
-  default void onSuccess(int chunkIndex, ManagedBuffer buffer, ByteBuf digestBuf) {
+  default void onSuccess(int chunkIndex, ManagedBuffer buffer, long digest) {
     onSuccess(chunkIndex, buffer);
   }
 

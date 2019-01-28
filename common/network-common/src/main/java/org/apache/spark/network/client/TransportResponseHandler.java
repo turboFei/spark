@@ -255,16 +255,10 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         logger.warn("Ignoring response for block {} from {} since it is not outstanding",
                 resp.streamChunkId, getRemoteAddress(channel));
         resp.body().release();
-        resp.digestBuf.release();
       } else {
         outstandingFetches.remove(resp.streamChunkId);
-        if (resp.digestLength == 0) {
-          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body());
-        } else {
-          listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body(), resp.digestBuf);
-        }
+        listener.onSuccess(resp.streamChunkId.chunkIndex, resp.body(), resp.digest);
         resp.body().release();
-        resp.digestBuf.release();
       }
     } else if (message instanceof DigestStreamResponse) {
       DigestStreamResponse resp = (DigestStreamResponse) message;
@@ -273,7 +267,7 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
         StreamCallback callback = entry.getValue();
         if (resp.byteCount > 0) {
           StreamInterceptor interceptor = new StreamInterceptor(this, resp.streamId, resp.byteCount,
-                  callback, resp.digestBuf);
+                  callback, resp.digest);
           try {
             TransportFrameDecoder frameDecoder = (TransportFrameDecoder)
                     channel.pipeline().get(TransportFrameDecoder.HANDLER_NAME);
@@ -285,19 +279,13 @@ public class TransportResponseHandler extends MessageHandler<ResponseMessage> {
           }
         } else {
           try {
-            if (resp.digestLength == 0) {
-              callback.onComplete(resp.streamId);
-            } else {
-              callback.onComplete(resp.streamId, resp.digestBuf);
-            }
+            callback.onComplete(resp.streamId, resp.digest);
           } catch (Exception e) {
             logger.warn("Error in stream handler onComplete().", e);
           }
         }
-        resp.digestBuf.release();
       } else {
         logger.error("Could not find callback for StreamResponse.");
-        resp.digestBuf.release();
       }
     } else {
       throw new IllegalStateException("Unknown response type: " + message.type());

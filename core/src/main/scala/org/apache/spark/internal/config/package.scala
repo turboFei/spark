@@ -532,13 +532,4 @@ package object config {
       .booleanConf
       .createWithDefault(false)
 
-  private[spark] val SHUFFLE_DIGEST_ALGORITHM =
-    ConfigBuilder("spark.shuffle.digest.codec")
-      .internal()
-      .doc("The algorithm for checking transmitted data during shuffle, " +
-        "crc or md5, default is crc.")
-      .stringConf
-      .createWithDefault("crc")
-
-
 }
