@@ -211,8 +211,7 @@ private[spark] class AppStatusStore(
           toValues(_.shuffleWriteBytes),
           toValues(_.shuffleWriteRecords),
           toValues(_.shuffleWriteTime),
-          toValues(_.shuffleDigestWriteTime)),
-         )
+          toValues(_.shuffleDigestWriteTime)))
 
       return Some(distributions)
     }
