@@ -17,19 +17,19 @@
 
 package org.apache.spark.storage
 
-import java.io.{InputStream, IOException}
+import java.io.{IOException, InputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
 
 import io.netty.buffer.{ByteBuf, Unpooled}
 import javax.annotation.concurrent.GuardedBy
+
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 import scala.util.control.Breaks._
-
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.internal.Logging
-import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle._
 import org.apache.spark.network.util.{DigestUtils, TransportConf}
 import org.apache.spark.shuffle.FetchFailedException
@@ -430,7 +430,8 @@ final class ShuffleBlockFetcherIterator(
             } catch {
               // The exception could only be throwed by local shuffle block
               case e: IOException =>
-                assert(buf.isInstanceOf[FileSegmentManagedBuffer])
+                assert(buf.isInstanceOf[FileSegmentManagedBuffer] ||
+                  buf.isInstanceOf[DigestFileSegmentManagedBuffer])
                 logError("Failed to create input stream from local block", e)
                 buf.release()
                 if (address != blockManager.blockManagerId && !corruptedBlocks.contains(blockId)) {
@@ -509,6 +510,7 @@ final class ShuffleBlockFetcherIterator(
                 case e: IOException =>
                   buf.release()
                   if (buf.isInstanceOf[FileSegmentManagedBuffer]
+                    || buf.isInstanceOf[DigestFileSegmentManagedBuffer]
                     || corruptedBlocks.contains(blockId)) {
                     throwFetchFailedException(blockId, address, e)
                   } else {
