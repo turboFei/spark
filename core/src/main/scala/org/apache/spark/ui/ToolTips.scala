@@ -99,4 +99,11 @@ private[spark] object ToolTips {
        dynamic allocation is enabled. The number of granted executors may exceed the limit
        ephemerally when executors are being killed.
     """
+
+  val DIGEST_WRITE_TIME =
+    "The digest time spent during shuffle Write"
+
+  val DIGEST_READ_TIME =
+    "The digest time spent during shuffle Read"
+
 }

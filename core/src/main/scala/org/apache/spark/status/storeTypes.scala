@@ -122,6 +122,8 @@ private[spark] object TaskIndexNames {
   final val OUTPUT_RECORDS = "or"
   final val OUTPUT_SIZE = "os"
   final val PEAK_MEM = "pem"
+  final val DIGEST_WRITE_TIME = "digest_write"
+  final val DIGEST_READ_TIME = "digest_read"
   final val RESULT_SIZE = "rs"
   final val SCHEDULER_DELAY = "dly"
   final val SER_TIME = "rst"
@@ -230,7 +232,11 @@ private[spark] class TaskDataWrapper(
     val shuffleRecordsWritten: Long,
 
     val stageId: Int,
-    val stageAttemptId: Int) {
+    val stageAttemptId: Int,
+    @KVIndexParam(value = TaskIndexNames.DIGEST_WRITE_TIME, parent = TaskIndexNames.STAGE)
+    val shuffleDigestWriteTime: Long,
+    @KVIndexParam(value = TaskIndexNames.DIGEST_READ_TIME, parent = TaskIndexNames.STAGE)
+    val shuffleDigestReadTime: Long) {
 
   def hasMetrics: Boolean = executorDeserializeTime >= 0
 
@@ -260,11 +266,13 @@ private[spark] class TaskDataWrapper(
           shuffleRemoteBytesRead,
           shuffleRemoteBytesReadToDisk,
           shuffleLocalBytesRead,
-          shuffleRecordsRead),
+          shuffleRecordsRead,
+          shuffleDigestReadTime),
         new ShuffleWriteMetrics(
           shuffleBytesWritten,
           shuffleWriteTime,
-          shuffleRecordsWritten)))
+          shuffleRecordsWritten,
+          shuffleDigestWriteTime)))
     } else {
       None
     }
@@ -475,10 +483,12 @@ private[spark] class CachedQuantile(
     val shuffleRemoteBytesRead: Double,
     val shuffleRemoteBytesReadToDisk: Double,
     val shuffleTotalBlocksFetched: Double,
+    val shuffleDigestReadTime: Double,
 
     val shuffleWriteBytes: Double,
     val shuffleWriteRecords: Double,
-    val shuffleWriteTime: Double) {
+    val shuffleWriteTime: Double,
+    val shuffleDigestWriteTime: Double) {
 
   @KVIndex @JsonIgnore
   def id: Array[Any] = Array(stageId, stageAttemptId, quantile)

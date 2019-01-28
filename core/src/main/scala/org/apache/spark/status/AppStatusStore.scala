@@ -205,11 +205,14 @@ private[spark] class AppStatusStore(
           toValues(_.shuffleFetchWaitTime),
           toValues(_.shuffleRemoteBytesRead),
           toValues(_.shuffleRemoteBytesReadToDisk),
-          toValues(_.shuffleTotalBlocksFetched)),
+          toValues(_.shuffleTotalBlocksFetched),
+          toValues(_.shuffleDigestReadTime)),
         shuffleWriteMetrics = new v1.ShuffleWriteMetricDistributions(
           toValues(_.shuffleWriteBytes),
           toValues(_.shuffleWriteRecords),
-          toValues(_.shuffleWriteTime)))
+          toValues(_.shuffleWriteTime),
+          toValues(_.shuffleDigestWriteTime)),
+         )
 
       return Some(distributions)
     }
@@ -288,11 +291,13 @@ private[spark] class AppStatusStore(
         },
         scanTasks(TaskIndexNames.SHUFFLE_TOTAL_BLOCKS) { m =>
           m.shuffleLocalBlocksFetched + m.shuffleRemoteBlocksFetched
-        }),
+        },
+        scanTasks(TaskIndexNames.DIGEST_READ_TIME){t => t.shuffleDigestReadTime}),
       shuffleWriteMetrics = new v1.ShuffleWriteMetricDistributions(
         scanTasks(TaskIndexNames.SHUFFLE_WRITE_SIZE) { t => t.shuffleBytesWritten },
         scanTasks(TaskIndexNames.SHUFFLE_WRITE_RECORDS) { t => t.shuffleRecordsWritten },
-        scanTasks(TaskIndexNames.SHUFFLE_WRITE_TIME) { t => t.shuffleWriteTime }))
+        scanTasks(TaskIndexNames.SHUFFLE_WRITE_TIME) { t => t.shuffleWriteTime },
+        scanTasks(TaskIndexNames.DIGEST_WRITE_TIME) { t => t.shuffleDigestWriteTime}))
 
     // Go through the computed quantiles and cache the values that match the caching criteria.
     computedQuantiles.quantiles.zipWithIndex
@@ -328,10 +333,12 @@ private[spark] class AppStatusStore(
           shuffleRemoteBytesReadToDisk =
             computedQuantiles.shuffleReadMetrics.remoteBytesReadToDisk(idx),
           shuffleTotalBlocksFetched = computedQuantiles.shuffleReadMetrics.totalBlocksFetched(idx),
+          shuffleDigestReadTime = computedQuantiles.shuffleReadMetrics.digestReadTime(idx),
 
           shuffleWriteBytes = computedQuantiles.shuffleWriteMetrics.writeBytes(idx),
           shuffleWriteRecords = computedQuantiles.shuffleWriteMetrics.writeRecords(idx),
-          shuffleWriteTime = computedQuantiles.shuffleWriteMetrics.writeTime(idx))
+          shuffleWriteTime = computedQuantiles.shuffleWriteMetrics.writeTime(idx),
+          shuffleDigestWriteTime = computedQuantiles.shuffleWriteMetrics.digestWriteTime(idx))
         store.write(cached)
       }
 

@@ -158,7 +158,9 @@ private class LiveTask(
         metrics.shuffleReadMetrics.recordsRead,
         metrics.shuffleWriteMetrics.bytesWritten,
         metrics.shuffleWriteMetrics.writeTime,
-        metrics.shuffleWriteMetrics.recordsWritten)
+        metrics.shuffleWriteMetrics.recordsWritten,
+        metrics.shuffleWriteMetrics.writeDigestTime,
+        metrics.shuffleReadMetrics.readDigestTime)
 
       this.metrics = newMetrics
 
@@ -222,7 +224,9 @@ private class LiveTask(
       metrics.shuffleWriteMetrics.recordsWritten,
 
       stageId,
-      stageAttemptId)
+      stageAttemptId,
+      metrics.shuffleWriteMetrics.digestWriteTime,
+      metrics.shuffleReadMetrics.digestReadTime)
   }
 
 }
@@ -621,7 +625,9 @@ private object LiveEntityHelpers {
       shuffleRecordsRead: Long,
       shuffleBytesWritten: Long,
       shuffleWriteTime: Long,
-      shuffleRecordsWritten: Long): v1.TaskMetrics = {
+      shuffleRecordsWritten: Long,
+      shuffleDigestWriteTime: Long,
+      shuffleDigestReadTime: Long): v1.TaskMetrics = {
     new v1.TaskMetrics(
       executorDeserializeTime,
       executorDeserializeCpuTime,
@@ -646,18 +652,22 @@ private object LiveEntityHelpers {
         shuffleRemoteBytesRead,
         shuffleRemoteBytesReadToDisk,
         shuffleLocalBytesRead,
-        shuffleRecordsRead),
+        shuffleRecordsRead,
+        shuffleDigestReadTime
+        ),
       new v1.ShuffleWriteMetrics(
         shuffleBytesWritten,
         shuffleWriteTime,
-        shuffleRecordsWritten))
+        shuffleRecordsWritten,
+        shuffleDigestWriteTime))
   }
   // scalastyle:on argcount
 
   def createMetrics(default: Long): v1.TaskMetrics = {
     createMetrics(default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default,
-      default, default, default, default, default, default, default, default)
+      default, default, default, default, default, default, default, default,
+      default, default)
   }
 
   /** Add m2 values to m1. */
@@ -694,7 +704,9 @@ private object LiveEntityHelpers {
       m1.shuffleReadMetrics.recordsRead + m2.shuffleReadMetrics.recordsRead * mult,
       m1.shuffleWriteMetrics.bytesWritten + m2.shuffleWriteMetrics.bytesWritten * mult,
       m1.shuffleWriteMetrics.writeTime + m2.shuffleWriteMetrics.writeTime * mult,
-      m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult)
+      m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult,
+      m1.shuffleWriteMetrics.digestWriteTime + m2.shuffleWriteMetrics.digestWriteTime * mult,
+      m1.shuffleReadMetrics.digestReadTime + m2.shuffleReadMetrics.digestReadTime * mult)
   }
 
 }
