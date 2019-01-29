@@ -343,6 +343,12 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         }
       }
 
+      def digestTimeQuantiles(data: IndexedSeq[Double]): Seq[Node] = {
+        data.map{nanomiles =>
+          <td>{UIUtils.formatDuration(TimeUnit.NANOSECONDS.toMillis(nanomiles.toLong))}</td>
+        }
+      }
+
       def sizeQuantiles(data: IndexedSeq[Double]): Seq[Node] = {
         data.map { size =>
           <td>{Utils.bytesToString(size.toLong)}</td>
@@ -384,10 +390,10 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         ToolTips.PEAK_EXECUTION_MEMORY) ++ sizeQuantiles(metrics.peakExecutionMemory)
 
       val digestWriteTimeQuantiles = titleCell("Digest Write Time",
-        ToolTips.DIGEST_WRITE_TIME) ++ timeQuantiles(metrics.shuffleWriteMetrics.digestWriteTime)
+        ToolTips.DIGEST_WRITE_TIME) ++ digestTimeQuantiles(metrics.shuffleWriteMetrics.digestWriteTime)
 
       val digestReadTimeQuantiles = titleCell("Digest Read Time",
-        ToolTips.DIGEST_READ_TIME) ++ timeQuantiles(metrics.shuffleReadMetrics.digestReadTime)
+        ToolTips.DIGEST_READ_TIME) ++ digestTimeQuantiles(metrics.shuffleReadMetrics.digestReadTime)
 
       // The scheduler delay includes the network delay to send the task to the worker
       // machine and to send back the result (but not the time to fetch the task result,
