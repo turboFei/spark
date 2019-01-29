@@ -58,6 +58,8 @@ public class ShuffleIndexInformation {
     DataInputStream dis = null;
     try {
       dis = new DataInputStream(Files.newInputStream(indexFile.toPath()));
+      // The flag in head
+      dis.readByte();
       dis.readFully(offsetsBuffer.array());
       dis.readFully(digestsBuffer.array());
     } finally {
