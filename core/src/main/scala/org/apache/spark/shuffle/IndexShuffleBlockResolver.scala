@@ -194,7 +194,7 @@ private[spark] class IndexShuffleBlockResolver(
           out.writeLong(offset)
         }
         if (digestEnable) {
-          val digestStartTime = System.nanoTime()
+          val digestStartTime = System.currentTimeMillis()
           for (i <- (0 until lengths.length)) {
             val length = lengths(i)
             if (length == 0 || dataIn == null) {
@@ -212,7 +212,7 @@ private[spark] class IndexShuffleBlockResolver(
             }
           }
           if (shuffleWriteMetrics != null) {
-            shuffleWriteMetrics.incWriteDigestTime(System.nanoTime() - digestStartTime)
+            shuffleWriteMetrics.incWriteDigestTime(System.currentTimeMillis() - digestStartTime)
           }
         }
       } {
