@@ -138,7 +138,8 @@ public class UnsafeShuffleWriterSuite {
       tmp.renameTo(mergedOutputFile);
       return null;
     }).when(shuffleBlockResolver)
-      .writeIndexFileAndCommit(anyInt(), anyInt(), any(long[].class), any(File.class));
+      .writeIndexFileAndCommit(anyInt(), anyInt(), any(long[].class), any(File.class),
+              any(ShuffleWriteMetrics.class));
 
     when(diskBlockManager.createTempShuffleBlock()).thenAnswer(invocationOnMock -> {
       TempShuffleBlockId blockId = new TempShuffleBlockId(UUID.randomUUID());

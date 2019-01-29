@@ -21,8 +21,8 @@ import java.io._
 import java.nio.channels.Channels
 import java.nio.file.Files
 
-import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.{SparkConf, SparkEnv}
+import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
 import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
@@ -160,7 +160,7 @@ private[spark] class IndexShuffleBlockResolver(
        shuffleId: Int,
        mapId: Int,
        lengths: Array[Long],
-       dataTmp: File): Unit ={
+       dataTmp: File): Unit = {
     writeIndexFileAndCommit(shuffleId, mapId, lengths, dataTmp, null)
   }
 
@@ -226,7 +226,8 @@ private[spark] class IndexShuffleBlockResolver(
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
       synchronized {
-        val existingLengthsDigests = checkIndexAndDataFile(indexFile, dataFile, lengths.length, digests)
+        val existingLengthsDigests = checkIndexAndDataFile(indexFile, dataFile, lengths.length,
+          digests)
         if (existingLengthsDigests != null) {
           // Another attempt for the same task has already written our map outputs successfully,
           // so just use the existing partition lengths and delete our temporary map outputs.

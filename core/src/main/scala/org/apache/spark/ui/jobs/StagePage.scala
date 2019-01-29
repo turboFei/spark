@@ -390,7 +390,8 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         ToolTips.PEAK_EXECUTION_MEMORY) ++ sizeQuantiles(metrics.peakExecutionMemory)
 
       val digestWriteTimeQuantiles = titleCell("Digest Write Time",
-        ToolTips.DIGEST_WRITE_TIME) ++ digestTimeQuantiles(metrics.shuffleWriteMetrics.digestWriteTime)
+        ToolTips.DIGEST_WRITE_TIME) ++
+        digestTimeQuantiles(metrics.shuffleWriteMetrics.digestWriteTime)
 
       val digestReadTimeQuantiles = titleCell("Digest Read Time",
         ToolTips.DIGEST_READ_TIME) ++ digestTimeQuantiles(metrics.shuffleReadMetrics.digestReadTime)
@@ -1033,8 +1034,8 @@ private[ui] object ApiHelper {
   val HEADER_SHUFFLE_WRITE_SIZE = "Shuffle Write Size / Records"
   val HEADER_MEM_SPILL = "Shuffle Spill (Memory)"
   val HEADER_DISK_SPILL = "Shuffle Spill (Disk)"
-  val HEADER_SHUFFLE_DIGEST_WRITE_TIME= "Shuffle digest Write time"
-  val HEADER_SHUFFLE_DIGEST_READ_TIME= "Shuffle digest Read time"
+  val HEADER_SHUFFLE_DIGEST_WRITE_TIME = "Shuffle digest Write time"
+  val HEADER_SHUFFLE_DIGEST_READ_TIME = "Shuffle digest Read time"
   val HEADER_ERROR = "Errors"
 
   private[ui] val COLUMN_TO_INDEX = Map(

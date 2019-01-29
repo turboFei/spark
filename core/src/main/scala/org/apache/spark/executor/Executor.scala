@@ -417,7 +417,8 @@ private[spark] class Executor(
         executorSource.METRIC_SHUFFLE_FETCH_WAIT_TIME
           .inc(task.metrics.shuffleReadMetrics.fetchWaitTime)
         executorSource.METRIC_SHUFFLE_WRITE_TIME.inc(task.metrics.shuffleWriteMetrics.writeTime)
-        executorSource.METRIC_SHUFFLE_DIGEST_WRITE_TIME.inc(task.metrics.shuffleWriteMetrics.writeDigestTime)
+        executorSource.METRIC_SHUFFLE_DIGEST_WRITE_TIME.inc(
+          task.metrics.shuffleWriteMetrics.writeDigestTime)
         executorSource.METRIC_SHUFFLE_TOTAL_BYTES_READ
           .inc(task.metrics.shuffleReadMetrics.totalBytesRead)
         executorSource.METRIC_SHUFFLE_REMOTE_BYTES_READ
