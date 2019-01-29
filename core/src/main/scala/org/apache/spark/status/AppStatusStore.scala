@@ -291,12 +291,14 @@ private[spark] class AppStatusStore(
         scanTasks(TaskIndexNames.SHUFFLE_TOTAL_BLOCKS) { m =>
           m.shuffleLocalBlocksFetched + m.shuffleRemoteBlocksFetched
         },
-        scanTasks(TaskIndexNames.DIGEST_READ_TIME){t => t.shuffleDigestReadTime}),
+        scanTasks(TaskIndexNames.DIGEST_READ_TIME){t => t.shuffleDigestReadTime
+        }),
       shuffleWriteMetrics = new v1.ShuffleWriteMetricDistributions(
         scanTasks(TaskIndexNames.SHUFFLE_WRITE_SIZE) { t => t.shuffleBytesWritten },
         scanTasks(TaskIndexNames.SHUFFLE_WRITE_RECORDS) { t => t.shuffleRecordsWritten },
         scanTasks(TaskIndexNames.SHUFFLE_WRITE_TIME) { t => t.shuffleWriteTime },
-        scanTasks(TaskIndexNames.DIGEST_WRITE_TIME) { t => t.shuffleDigestWriteTime}))
+        scanTasks(TaskIndexNames.DIGEST_WRITE_TIME) { t => t.shuffleDigestWriteTime
+        }))
 
     // Go through the computed quantiles and cache the values that match the caching criteria.
     computedQuantiles.quantiles.zipWithIndex

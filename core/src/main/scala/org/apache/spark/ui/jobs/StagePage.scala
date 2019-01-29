@@ -845,17 +845,6 @@ private[ui] class TaskPagedTable(
       }.getOrElse("")
     }
 
-    def formatTwoDuration(value1: Option[Long], value2: Option[Long],
-                          hideZero: Boolean = false): String = {
-      value1.map { v =>
-        if (v > 0 || !hideZero) UIUtils.formatDuration(v) else ""
-      }.getOrElse("") + "/" +
-        value2.map { v =>
-          if (v > 0 || !hideZero) UIUtils.formatDuration(v) else ""
-        }.getOrElse("")
-
-    }
-
     def formatBytes(value: Option[Long]): String = {
       Utils.bytesToString(value.getOrElse(0L))
     }
