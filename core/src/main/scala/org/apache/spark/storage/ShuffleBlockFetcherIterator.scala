@@ -22,7 +22,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
 
 import javax.annotation.concurrent.GuardedBy
-import org.apache.spark.executor.{ShuffleReadMetrics, TempShuffleReadMetrics}
+import org.apache.spark.executor.TempShuffleReadMetrics
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
