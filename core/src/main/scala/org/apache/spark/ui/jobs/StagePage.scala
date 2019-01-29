@@ -47,7 +47,9 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
             ("executor-runtime-proportion", "Executor Computing Time"),
             ("shuffle-write-time-proportion", "Shuffle Write Time"),
             ("serialization-time-proportion", "Result Serialization Time"),
-            ("getting-result-time-proportion", "Getting Result Time"))
+            ("getting-result-time-proportion", "Getting Result Time"),
+            ("digest-write-time-proportion", "Digest Write Time"),
+            ("digest-read-time-proportion", "Digest Read Time"))
 
           legendPairs.zipWithIndex.map {
             case ((classAttr, name), index) =>
@@ -448,8 +450,6 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         <tr class={TaskDetailsClassNames.PEAK_EXECUTION_MEMORY}>
           {peakExecutionMemoryQuantiles}
         </tr>,
-        if (hasShuffleWrite(stageData)) <tr>{digestWriteTimeQuantiles}</tr> else Nil,
-        if (hasShuffleRead(stageData)) <tr>{digestReadTimeQuantiles}</tr> else Nil,
         if (hasInput(stageData)) <tr>{inputQuantiles}</tr> else Nil,
         if (hasOutput(stageData)) <tr>{outputQuantiles}</tr> else Nil,
         if (hasShuffleRead(stageData)) {
@@ -465,7 +465,9 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         },
         if (hasShuffleWrite(stageData)) <tr>{shuffleWriteQuantiles}</tr> else Nil,
         if (hasBytesSpilled(stageData)) <tr>{memoryBytesSpilledQuantiles}</tr> else Nil,
-        if (hasBytesSpilled(stageData)) <tr>{diskBytesSpilledQuantiles}</tr> else Nil)
+        if (hasBytesSpilled(stageData)) <tr>{diskBytesSpilledQuantiles}</tr> else Nil,
+        if (hasShuffleWrite(stageData)) <tr>{digestWriteTimeQuantiles}</tr> else Nil,
+        if (hasShuffleRead(stageData)) <tr>{digestReadTimeQuantiles}</tr> else Nil)
 
       val quantileHeaders = Seq("Metric", "Min", "25th percentile", "Median", "75th percentile",
         "Max")
@@ -775,12 +777,6 @@ private[ui] class TaskPagedTable(
         (HEADER_SER_TIME, TaskDetailsClassNames.RESULT_SERIALIZATION_TIME),
         (HEADER_GETTING_RESULT_TIME, TaskDetailsClassNames.GETTING_RESULT_TIME),
         (HEADER_PEAK_MEM, TaskDetailsClassNames.PEAK_EXECUTION_MEMORY)) ++
-        {if (hasShuffleWrite(stage)) {
-          Seq((HEADER_SHUFFLE_DIGEST_WRITE_TIME, ""))
-        } else Nil} ++
-        {if (hasShuffleRead(stage)) {
-          Seq((HEADER_SHUFFLE_DIGEST_READ_TIME, ""))
-        } else Nil} ++
         {if (hasAccumulators(stage)) Seq((HEADER_ACCUMULATORS, "")) else Nil} ++
         {if (hasInput(stage)) Seq((HEADER_INPUT_SIZE, "")) else Nil} ++
         {if (hasOutput(stage)) Seq((HEADER_OUTPUT_SIZE, "")) else Nil} ++
@@ -801,6 +797,12 @@ private[ui] class TaskPagedTable(
         } else {
           Nil
         }} ++
+        {if (hasShuffleWrite(stage)) {
+          Seq((HEADER_SHUFFLE_DIGEST_WRITE_TIME, ""))
+        } else Nil} ++
+        {if (hasShuffleRead(stage)) {
+          Seq((HEADER_SHUFFLE_DIGEST_READ_TIME, ""))
+        } else Nil} ++
         Seq((HEADER_ERROR, ""))
 
     if (!taskHeadersAndCssClasses.map(_._1).contains(sortColumn)) {
@@ -886,16 +888,6 @@ private[ui] class TaskPagedTable(
       <td class={TaskDetailsClassNames.PEAK_EXECUTION_MEMORY}>
         {formatBytes(task.taskMetrics.map(_.peakExecutionMemory))}
       </td>
-      {if (hasShuffleWrite(stage)) {
-      <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}>
-        {formatDuration(task.taskMetrics.map(_.shuffleWriteMetrics.digestWriteTime))}
-      </td>
-      }}
-      {if (hasShuffleRead(stage)) {
-      <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
-        {formatDuration(task.taskMetrics.map(_.shuffleReadMetrics.digestReadTime))}
-      </td>
-    }}
       {if (hasAccumulators(stage)) {
         <td>{accumulatorsInfo(task)}</td>
       }}
@@ -948,8 +940,19 @@ private[ui] class TaskPagedTable(
         <td>{formatBytes(task.taskMetrics.map(_.memoryBytesSpilled))}</td>
         <td>{formatBytes(task.taskMetrics.map(_.diskBytesSpilled))}</td>
       }}
+      {if (hasShuffleWrite(stage)) {
+      <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}>
+        {formatDuration(task.taskMetrics.map(_.shuffleWriteMetrics.digestWriteTime))}
+      </td>
+    }}
+      {if (hasShuffleRead(stage)) {
+      <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
+        {formatDuration(task.taskMetrics.map(_.shuffleReadMetrics.digestReadTime))}
+      </td>
+    }}
       {errorMessageCell(task.errorMessage.getOrElse(""))}
     </tr>
+
   }
 
   private def accumulatorsInfo(task: TaskData): Seq[Node] = {
@@ -1009,8 +1012,6 @@ private[ui] object ApiHelper {
   val HEADER_SER_TIME = "Result Serialization Time"
   val HEADER_GETTING_RESULT_TIME = "Getting Result Time"
   val HEADER_PEAK_MEM = "Peak Execution Memory"
-  val HEADER_SHUFFLE_DIGEST_WRITE_TIME= "Shuffle digest Write time"
-  val HEADER_SHUFFLE_DIGEST_READ_TIME= "Shuffle digest Write time"
   val HEADER_ACCUMULATORS = "Accumulators"
   val HEADER_INPUT_SIZE = "Input Size / Records"
   val HEADER_OUTPUT_SIZE = "Output Size / Records"
@@ -1021,6 +1022,8 @@ private[ui] object ApiHelper {
   val HEADER_SHUFFLE_WRITE_SIZE = "Shuffle Write Size / Records"
   val HEADER_MEM_SPILL = "Shuffle Spill (Memory)"
   val HEADER_DISK_SPILL = "Shuffle Spill (Disk)"
+  val HEADER_SHUFFLE_DIGEST_WRITE_TIME= "Shuffle digest Write time"
+  val HEADER_SHUFFLE_DIGEST_READ_TIME= "Shuffle digest Read time"
   val HEADER_ERROR = "Errors"
 
   private[ui] val COLUMN_TO_INDEX = Map(
@@ -1039,8 +1042,6 @@ private[ui] object ApiHelper {
     HEADER_SER_TIME -> TaskIndexNames.SER_TIME,
     HEADER_GETTING_RESULT_TIME -> TaskIndexNames.GETTING_RESULT_TIME,
     HEADER_PEAK_MEM -> TaskIndexNames.PEAK_MEM,
-    HEADER_SHUFFLE_DIGEST_READ_TIME -> TaskIndexNames.DIGEST_READ_TIME,
-    HEADER_SHUFFLE_DIGEST_WRITE_TIME -> TaskIndexNames.DIGEST_WRITE_TIME,
     HEADER_ACCUMULATORS -> TaskIndexNames.ACCUMULATORS,
     HEADER_INPUT_SIZE -> TaskIndexNames.INPUT_SIZE,
     HEADER_OUTPUT_SIZE -> TaskIndexNames.OUTPUT_SIZE,
@@ -1051,6 +1052,8 @@ private[ui] object ApiHelper {
     HEADER_SHUFFLE_WRITE_SIZE -> TaskIndexNames.SHUFFLE_WRITE_SIZE,
     HEADER_MEM_SPILL -> TaskIndexNames.MEM_SPILL,
     HEADER_DISK_SPILL -> TaskIndexNames.DISK_SPILL,
+    HEADER_SHUFFLE_DIGEST_WRITE_TIME -> TaskIndexNames.DIGEST_WRITE_TIME,
+    HEADER_SHUFFLE_DIGEST_READ_TIME -> TaskIndexNames.DIGEST_READ_TIME,
     HEADER_ERROR -> TaskIndexNames.ERROR)
 
   def hasAccumulators(stageData: StageData): Boolean = {

@@ -122,8 +122,6 @@ private[spark] object TaskIndexNames {
   final val OUTPUT_RECORDS = "or"
   final val OUTPUT_SIZE = "os"
   final val PEAK_MEM = "pem"
-  final val DIGEST_WRITE_TIME = "digest_write"
-  final val DIGEST_READ_TIME = "digest_read"
   final val RESULT_SIZE = "rs"
   final val SCHEDULER_DELAY = "dly"
   final val SER_TIME = "rst"
@@ -135,9 +133,11 @@ private[spark] object TaskIndexNames {
   final val SHUFFLE_REMOTE_READS_TO_DISK = "srbd"
   final val SHUFFLE_TOTAL_READS = "stby"
   final val SHUFFLE_TOTAL_BLOCKS = "stbl"
+  final val DIGEST_READ_TIME = "digest_read"
   final val SHUFFLE_WRITE_RECORDS = "swr"
   final val SHUFFLE_WRITE_SIZE = "sws"
   final val SHUFFLE_WRITE_TIME = "swt"
+  final val DIGEST_WRITE_TIME = "digest_write"
   final val STAGE = "stage"
   final val STATUS = "sta"
   final val TASK_INDEX = "idx"
@@ -224,19 +224,19 @@ private[spark] class TaskDataWrapper(
     val shuffleLocalBytesRead: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_READ_RECORDS, parent = TaskIndexNames.STAGE)
     val shuffleRecordsRead: Long,
+    @KVIndexParam(value = TaskIndexNames.DIGEST_READ_TIME, parent = TaskIndexNames.STAGE)
+    val shuffleDigestReadTime: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_SIZE, parent = TaskIndexNames.STAGE)
     val shuffleBytesWritten: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_TIME, parent = TaskIndexNames.STAGE)
     val shuffleWriteTime: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_RECORDS, parent = TaskIndexNames.STAGE)
     val shuffleRecordsWritten: Long,
-
-    val stageId: Int,
-    val stageAttemptId: Int,
     @KVIndexParam(value = TaskIndexNames.DIGEST_WRITE_TIME, parent = TaskIndexNames.STAGE)
     val shuffleDigestWriteTime: Long,
-    @KVIndexParam(value = TaskIndexNames.DIGEST_READ_TIME, parent = TaskIndexNames.STAGE)
-    val shuffleDigestReadTime: Long) {
+
+    val stageId: Int,
+    val stageAttemptId: Int) {
 
   def hasMetrics: Boolean = executorDeserializeTime >= 0
 

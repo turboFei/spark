@@ -20,7 +20,6 @@ package org.apache.spark.storage
 import java.io.{IOException, InputStream}
 import java.nio.ByteBuffer
 import java.util.concurrent.LinkedBlockingQueue
-
 import javax.annotation.concurrent.GuardedBy
 import org.apache.spark.executor.TempShuffleReadMetrics
 
