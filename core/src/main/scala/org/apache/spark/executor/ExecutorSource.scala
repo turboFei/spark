@@ -88,6 +88,8 @@ class ExecutorSource(threadPool: ThreadPoolExecutor, executorId: String) extends
     metricRegistry.counter(MetricRegistry.name("shuffleFetchWaitTime"))
   val METRIC_SHUFFLE_WRITE_TIME =
     metricRegistry.counter(MetricRegistry.name("shuffleWriteTime"))
+  val METRIC_SHUFFLE_DIGEST_WRITE_TIME =
+    metricRegistry.counter(MetricRegistry.name("shuffleDigestWriteTime"))
   val METRIC_SHUFFLE_TOTAL_BYTES_READ =
     metricRegistry.counter(MetricRegistry.name("shuffleTotalBytesRead"))
   val METRIC_SHUFFLE_REMOTE_BYTES_READ =
@@ -110,6 +112,8 @@ class ExecutorSource(threadPool: ThreadPoolExecutor, executorId: String) extends
     metricRegistry.counter(MetricRegistry.name("bytesRead"))
   val METRIC_INPUT_RECORDS_READ =
     metricRegistry.counter(MetricRegistry.name("recordsRead"))
+  val METRIC_SHUFFLE_DIGEST_READ_TIME =
+    metricRegistry.counter(MetricRegistry.name("shuffleDigestReadTime"))
   val METRIC_OUTPUT_BYTES_WRITTEN =
     metricRegistry.counter(MetricRegistry.name("bytesWritten"))
   val METRIC_OUTPUT_RECORDS_WRITTEN =
