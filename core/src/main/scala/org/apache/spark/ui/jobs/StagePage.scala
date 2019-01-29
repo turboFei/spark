@@ -942,12 +942,16 @@ private[ui] class TaskPagedTable(
       }}
       {if (hasShuffleWrite(stage)) {
       <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}>
-        {formatDuration(task.taskMetrics.map(_.shuffleWriteMetrics.digestWriteTime))}
+        {formatDuration(task.taskMetrics.map{ m =>
+           TimeUnit.NANOSECONDS.toMillis(m.shuffleWriteMetrics.digestWriteTime)
+      })}
       </td>
     }}
       {if (hasShuffleRead(stage)) {
       <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
-        {formatDuration(task.taskMetrics.map(_.shuffleReadMetrics.digestReadTime))}
+        {formatDuration(task.taskMetrics.map{ m =>
+          TimeUnit.NANOSECONDS.toMillis(m.shuffleReadMetrics.digestReadTime)
+      })}
       </td>
     }}
       {errorMessageCell(task.errorMessage.getOrElse(""))}

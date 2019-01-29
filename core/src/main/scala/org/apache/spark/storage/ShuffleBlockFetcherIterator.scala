@@ -445,7 +445,7 @@ final class ShuffleBlockFetcherIterator(
             // detect inputStream  corrupt
             if (digestEnable) {
               if (digest >= 0) {
-                val digestStartTime = System.currentTimeMillis()
+                val digestStartTime = System.nanoTime()
                 val checkDigest = try {
                   DigestUtils.getDigest(in)
                 } catch {
@@ -455,7 +455,7 @@ final class ShuffleBlockFetcherIterator(
                     throwFetchFailedException(blockId, address, e)
                 }
                 if (shuffleReadMetrics != null) {
-                  shuffleReadMetrics.incReadDigestTime(System.currentTimeMillis() - digestStartTime)
+                  shuffleReadMetrics.incReadDigestTime(System.nanoTime() - digestStartTime)
                 }
 
                 if (digest != checkDigest) {
