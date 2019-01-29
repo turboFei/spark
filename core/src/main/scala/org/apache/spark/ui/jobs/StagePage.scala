@@ -798,11 +798,15 @@ private[ui] class TaskPagedTable(
           Nil
         }} ++
         {if (hasShuffleWrite(stage)) {
-          Seq((HEADER_SHUFFLE_DIGEST_WRITE_TIME, ""))
-        } else Nil} ++
+          Seq((HEADER_SHUFFLE_DIGEST_WRITE_TIME, TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME))
+        } else {
+          Nil
+        }} ++
         {if (hasShuffleRead(stage)) {
-          Seq((HEADER_SHUFFLE_DIGEST_READ_TIME, ""))
-        } else Nil} ++
+          Seq((HEADER_SHUFFLE_DIGEST_READ_TIME, TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME))
+        } else {
+          Nil
+        }} ++
         Seq((HEADER_ERROR, ""))
 
     if (!taskHeadersAndCssClasses.map(_._1).contains(sortColumn)) {
@@ -943,20 +947,15 @@ private[ui] class TaskPagedTable(
       {if (hasShuffleWrite(stage)) {
       <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}>
         {formatDuration(task.taskMetrics.map{ m =>
-           TimeUnit.NANOSECONDS.toMillis(m.shuffleWriteMetrics.digestWriteTime)
-      })}
-      </td>
-    }}
+           TimeUnit.NANOSECONDS.toMillis(m.shuffleWriteMetrics.digestWriteTime)})}</td>
+      }}
       {if (hasShuffleRead(stage)) {
-      <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
-        {formatDuration(task.taskMetrics.map{ m =>
-          TimeUnit.NANOSECONDS.toMillis(m.shuffleReadMetrics.digestReadTime)
-      })}
-      </td>
-    }}
+         <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
+            {formatDuration(task.taskMetrics.map{ m =>
+                TimeUnit.NANOSECONDS.toMillis(m.shuffleReadMetrics.digestReadTime)})}</td>
+      }}
       {errorMessageCell(task.errorMessage.getOrElse(""))}
     </tr>
-
   }
 
   private def accumulatorsInfo(task: TaskData): Seq[Node] = {
