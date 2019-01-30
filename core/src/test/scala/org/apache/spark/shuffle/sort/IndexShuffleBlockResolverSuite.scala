@@ -26,6 +26,7 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfterEach
+
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer
 import org.apache.spark.network.util.DigestUtils
