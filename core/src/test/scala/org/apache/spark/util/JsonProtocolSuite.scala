@@ -1135,12 +1135,14 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |      "Remote Bytes Read": 1000,
       |      "Remote Bytes Read To Disk": 400,
       |      "Local Bytes Read": 1100,
-      |      "Total Records Read": 10
+      |      "Total Records Read": 10,
+      |      "Digest Read Time" : 0
       |    },
       |    "Shuffle Write Metrics": {
       |      "Shuffle Bytes Written": 1200,
       |      "Shuffle Write Time": 1500,
-      |      "Shuffle Records Written": 12
+      |      "Shuffle Records Written": 12,
+      |      "Digest Write Time" : 0
       |    },
       |    "Input Metrics" : {
       |      "Bytes Read" : 0,
@@ -1236,12 +1238,14 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |      "Remote Bytes Read" : 0,
       |      "Remote Bytes Read To Disk" : 0,
       |      "Local Bytes Read" : 0,
-      |      "Total Records Read" : 0
+      |      "Total Records Read" : 0,
+      |      "Digest Read Time" : 0
       |    },
       |    "Shuffle Write Metrics": {
       |      "Shuffle Bytes Written": 1200,
       |      "Shuffle Write Time": 1500,
-      |      "Shuffle Records Written": 12
+      |      "Shuffle Records Written": 12,
+      |      "Digest Write Time" : 0
       |    },
       |    "Input Metrics": {
       |      "Bytes Read": 2100,
@@ -1337,12 +1341,14 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |      "Remote Bytes Read" : 0,
       |      "Remote Bytes Read To Disk" : 0,
       |      "Local Bytes Read" : 0,
-      |      "Total Records Read" : 0
+      |      "Total Records Read" : 0,
+      |      "Digest Read Time" : 0
       |    },
       |    "Shuffle Write Metrics": {
       |      "Shuffle Bytes Written" : 0,
       |      "Shuffle Write Time" : 0,
-      |      "Shuffle Records Written" : 0
+      |      "Shuffle Records Written" : 0,
+      |      "Digest Write Time" : 0
       |    },
       |    "Input Metrics": {
       |      "Bytes Read": 2100,
@@ -1951,55 +1957,69 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |        },
       |        {
       |          "ID": 18,
-      |          "Name": "${shuffleWrite.BYTES_WRITTEN}",
+      |          "Name": "${shuffleRead.READ_DIGEST_TIME}",
       |          "Update": 0,
       |          "Internal": true,
       |          "Count Failed Values": true
       |        },
       |        {
       |          "ID": 19,
-      |          "Name": "${shuffleWrite.RECORDS_WRITTEN}",
+      |          "Name": "${shuffleWrite.BYTES_WRITTEN}",
       |          "Update": 0,
       |          "Internal": true,
       |          "Count Failed Values": true
       |        },
       |        {
       |          "ID": 20,
-      |          "Name": "${shuffleWrite.WRITE_TIME}",
+      |          "Name": "${shuffleWrite.RECORDS_WRITTEN}",
       |          "Update": 0,
       |          "Internal": true,
       |          "Count Failed Values": true
       |        },
       |        {
       |          "ID": 21,
+      |          "Name": "${shuffleWrite.WRITE_TIME}",
+      |          "Update": 0,
+      |          "Internal": true,
+      |          "Count Failed Values": true
+      |        },
+      |        {
+      |          "ID": 22,
+      |          "Name": "${shuffleWrite.WRITE_DIGEST_TIME}",
+      |          "Update": 0,
+      |          "Internal": true,
+      |          "Count Failed Values": true
+      |        },
+      |        {
+      |          "ID": 23,
       |          "Name": "${input.BYTES_READ}",
       |          "Update": 2100,
       |          "Internal": true,
       |          "Count Failed Values": true
       |        },
       |        {
-      |          "ID": 22,
+      |          "ID": 24,
       |          "Name": "${input.RECORDS_READ}",
       |          "Update": 21,
       |          "Internal": true,
       |          "Count Failed Values": true
       |        },
       |        {
-      |          "ID": 23,
+      |          "ID": 25,
       |          "Name": "${output.BYTES_WRITTEN}",
       |          "Update": 1200,
       |          "Internal": true,
       |          "Count Failed Values": true
       |        },
       |        {
-      |          "ID": 24,
+      |          "ID": 26,
       |          "Name": "${output.RECORDS_WRITTEN}",
       |          "Update": 12,
       |          "Internal": true,
       |          "Count Failed Values": true
       |        },
       |        {
-      |          "ID": 25,
+      |          "ID": 27,
       |          "Name": "$TEST_ACCUM",
       |          "Update": 0,
       |          "Internal": true,

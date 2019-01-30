@@ -28,11 +28,13 @@
     "fetchWaitTime" : [ 0.0, 0.0, 0.0, 1.0, 1.0 ],
     "remoteBytesRead" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ],
     "remoteBytesReadToDisk" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ],
-    "totalBlocksFetched" : [ 100.0, 100.0, 100.0, 100.0, 100.0 ]
+    "totalBlocksFetched" : [ 100.0, 100.0, 100.0, 100.0, 100.0 ],
+      "digestReadTime" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
   },
   "shuffleWriteMetrics" : {
     "writeBytes" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ],
     "writeRecords" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ],
-    "writeTime" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
+    "writeTime" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ],
+      "digestWriteTime" : [ 0.0, 0.0, 0.0, 0.0, 0.0 ]
   }
 }
