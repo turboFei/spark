@@ -39,7 +39,7 @@ public final class DigestFileSegmentManagedBuffer extends ManagedBuffer {
   private final long length;
   private final long digest;
 
-  public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, Long digest) {
+  public DigestFileSegmentManagedBuffer(TransportConf conf, File file, long offset, long length, long digest) {
     this.conf = conf;
     this.file = file;
     this.offset = offset;

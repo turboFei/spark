@@ -258,7 +258,7 @@ public class ExternalShuffleBlockResolver {
                 shuffleIndexRecord.getLength());
       }
     } catch (ExecutionException e) {
-      throw new RuntimeException("Failed to open file: " + indexFile , e);
+      throw new RuntimeException("Failed to open file: " + indexFile, e);
     }
   }
 
