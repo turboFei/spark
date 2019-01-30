@@ -17,7 +17,7 @@
 
 package org.apache.spark.shuffle.sort
 
-import java.io.{File, FileInputStream, FileOutputStream}
+import java.io.{ByteArrayInputStream, File, FileInputStream, FileOutputStream}
 
 import org.mockito.{Mock, MockitoAnnotations}
 import org.mockito.Answers.RETURNS_SMART_NULLS
@@ -26,7 +26,6 @@ import org.mockito.Mockito._
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.scalatest.BeforeAndAfterEach
-
 import org.apache.spark.{SparkConf, SparkFunSuite}
 import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer
 import org.apache.spark.network.util.DigestUtils
@@ -137,22 +136,24 @@ class IndexShuffleBlockResolverSuite extends SparkFunSuite with BeforeAndAfterEa
   }
 
   test("NESPARK-160: check the digest when digest is enable") {
-    for (codec <- Array("md5", "crc32")) {
-      conf.set("spark.shuffle.digest.enable", "true")
-      val resolver = new IndexShuffleBlockResolver(conf, blockManager)
-      val lengths = Array[Long](10, 0, 20)
-      val dataTmp = File.createTempFile("shuffle", null, tempDir)
-      val out = new FileOutputStream(dataTmp)
-      Utils.tryWithSafeFinally {
-        out.write(new Array[Byte](30))
-      } {
-        out.close()
-      }
-      resolver.writeIndexFileAndCommit(1, 2, lengths, dataTmp)
-      val managedBuffer = resolver.getBlockData(ShuffleBlockId(1, 2, 0))
-      assert(managedBuffer.isInstanceOf[DigestFileSegmentManagedBuffer])
-      assert(managedBuffer.asInstanceOf[DigestFileSegmentManagedBuffer].getDigest > 0)
+    val confClone = conf.clone
+    confClone.set("spark.shuffle.digest.enable", "true")
+    val resolver = new IndexShuffleBlockResolver(confClone, blockManager)
+    val lengths = Array[Long](10, 0, 20)
+    val dataTmp = File.createTempFile("shuffle", null, tempDir)
+    val out = new FileOutputStream(dataTmp)
+    Utils.tryWithSafeFinally {
+      out.write(new Array[Byte](30))
+    } {
+      out.close()
     }
+    val digest = DigestUtils.getDigest(new ByteArrayInputStream(new Array[Byte](10)))
+
+    resolver.writeIndexFileAndCommit(1, 2, lengths, dataTmp)
+    val managedBuffer = resolver.getBlockData(ShuffleBlockId(1, 2, 0))
+    assert(managedBuffer.isInstanceOf[DigestFileSegmentManagedBuffer])
+    assert(managedBuffer.asInstanceOf[DigestFileSegmentManagedBuffer].getDigest == digest)
+
   }
 
 }
