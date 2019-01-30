@@ -348,8 +348,9 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
     // The next block is corrupt local block (the second one is corrupt and retried)
     intercept[FetchFailedException] { iterator.next() }
 
-//    sem.acquire()
-//    intercept[FetchFailedException] { iterator.next() }
+    // because fot the local file exception, throws  fetch failed without retry
+    // sem.acquire()
+    // intercept[FetchFailedException] { iterator.next() }
   }
 
   test("big blocks are not checked for corruption") {
