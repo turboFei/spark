@@ -451,7 +451,7 @@ final class ShuffleBlockFetcherIterator(
                   DigestUtils.getDigest(in)
                 } catch {
                   case e: IOException =>
-                    logError("NESPARK-160: error to check md5", e)
+                    logError("NESPARK-160: error to check digest", e)
                     buf.release()
                     throwFetchFailedException(blockId, address, e)
                 }
@@ -464,8 +464,8 @@ final class ShuffleBlockFetcherIterator(
                   val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest " +
                     s"$checkDigest of $blockId is not equal with orgin $digest")
                   if (corruptedBlocks.contains(blockId)) {
-                    // mark the task as failed
-                    TaskContext.get().asInstanceOf[TaskContextImpl].markTaskFailed(e)
+                    // TODO: NESPARK-160 justMarkTaskFailed or throwFetchFailed
+                    throwFetchFailedException(blockId, address, e)
                   } else {
                     logError("The md5 of read data error and fetch again", e)
                     corruptedBlocks += blockId
