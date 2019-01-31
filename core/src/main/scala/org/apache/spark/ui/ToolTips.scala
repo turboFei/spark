@@ -101,9 +101,9 @@ private[spark] object ToolTips {
     """
 
   val DIGEST_WRITE_TIME =
-    "The digest time spent during shuffle Write"
+    """The digest time spent during shuffle Write"""
 
   val DIGEST_READ_TIME =
-    "The digest time spent during shuffle Read"
+    """The digest time spent during shuffle Read"""
 
 }
