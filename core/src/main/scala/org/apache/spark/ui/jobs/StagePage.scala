@@ -473,8 +473,20 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         if (hasShuffleWrite(stageData)) <tr>{shuffleWriteQuantiles}</tr> else Nil,
         if (hasBytesSpilled(stageData)) <tr>{memoryBytesSpilledQuantiles}</tr> else Nil,
         if (hasBytesSpilled(stageData)) <tr>{diskBytesSpilledQuantiles}</tr> else Nil,
-        if (hasShuffleWrite(stageData)) <tr>{digestWriteTimeQuantiles}</tr> else Nil,
-        if (hasShuffleRead(stageData)) <tr>{digestReadTimeQuantiles}</tr> else Nil)
+        if (hasShuffleWrite(stageData)) {
+          <tr class={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}>
+            {digestWriteTimeQuantiles}
+          </tr>
+        } else {
+          Nil
+        },
+        if (hasShuffleRead(stageData)) {
+          <tr class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
+            {digestReadTimeQuantiles}
+          </tr>
+        } else {
+          Nil
+        })
 
       val quantileHeaders = Seq("Metric", "Min", "25th percentile", "Median", "75th percentile",
         "Max")
