@@ -26,7 +26,7 @@ import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 import scala.util.control.Breaks._
 
-import org.apache.spark.{SparkException, TaskContext, TaskContextImpl}
+import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.executor.TempShuffleReadMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
@@ -427,18 +427,24 @@ final class ShuffleBlockFetcherIterator(
             var in = try {
               buf.createInputStream()
             } catch {
-              // The exception could only be throwed by local shuffle block
+              // The exception could be throwed by local shuffle block or remote downloaded block
               case e: IOException =>
                 assert(buf.isInstanceOf[FileSegmentManagedBuffer] ||
                   buf.isInstanceOf[DigestFileSegmentManagedBuffer])
-                logError("Failed to create input stream from local block", e)
                 buf.release()
                 if (address != blockManager.blockManagerId && !corruptedBlocks.contains(blockId)) {
+                  logError("Failed to create input stream from remote downloaded block " +
+                    "and try again", e)
                   corruptedBlocks.add(blockId)
                   fetchRequests += FetchRequest(address, Array((blockId, size)))
                   result = null
                   break()
                 } else {
+                  if (address == blockManager.blockManagerId) {
+                    logError("Failed to create input stream from local block", e)
+                  } else {
+                    logError("Failed to create input stream from remote downloaded block twice", e)
+                  }
                   throwFetchFailedException(blockId, address, e)
                 }
             }
@@ -451,7 +457,7 @@ final class ShuffleBlockFetcherIterator(
                   DigestUtils.getDigest(in)
                 } catch {
                   case e: IOException =>
-                    logError("NESPARK-160: error to check digest", e)
+                    logError("NESPARK-160: Error when checking digest", e)
                     buf.release()
                     throwFetchFailedException(blockId, address, e)
                 }
@@ -467,14 +473,14 @@ final class ShuffleBlockFetcherIterator(
                     // TODO: NESPARK-160 justMarkTaskFailed or throwFetchFailed
                     throwFetchFailedException(blockId, address, e)
                   } else {
-                    logError("The md5 of read data error and fetch again", e)
+                    logError("The digest of read data is not correct and fetch again", e)
                     corruptedBlocks += blockId
                     fetchRequests += FetchRequest(address, Array((blockId, size)))
                     result = null
                     break()
                   }
                 }
-                logDebug(s"NESPARK-160: the check is passed and origin digest " +
+                logDebug(s"NESPARK-160: the check is passed and origin digest is " +
                 s"$checkDigest")
                 // reset the inputStream, for the unSupported inputStream, recreate it
                 if (in.markSupported()) {
