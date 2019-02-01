@@ -389,11 +389,11 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
       val peakExecutionMemoryQuantiles = titleCell("Peak Execution Memory",
         ToolTips.PEAK_EXECUTION_MEMORY) ++ sizeQuantiles(metrics.peakExecutionMemory)
 
-      val digestWriteTimeQuantiles = titleCell("Digest Write Time",
+      val digestWriteTimeQuantiles = titleCell("Shuffle Digest Write Time",
         ToolTips.DIGEST_WRITE_TIME) ++
         digestTimeQuantiles(metrics.shuffleWriteMetrics.digestWriteTime)
 
-      val digestReadTimeQuantiles = titleCell("Digest Read Time",
+      val digestReadTimeQuantiles = titleCell("Shuffle Digest Read Time",
         ToolTips.DIGEST_READ_TIME) ++ digestTimeQuantiles(metrics.shuffleReadMetrics.digestReadTime)
 
       // The scheduler delay includes the network delay to send the task to the worker
@@ -1046,8 +1046,8 @@ private[ui] object ApiHelper {
   val HEADER_SHUFFLE_WRITE_SIZE = "Shuffle Write Size / Records"
   val HEADER_MEM_SPILL = "Shuffle Spill (Memory)"
   val HEADER_DISK_SPILL = "Shuffle Spill (Disk)"
-  val HEADER_SHUFFLE_DIGEST_WRITE_TIME = "Shuffle digest Write time"
-  val HEADER_SHUFFLE_DIGEST_READ_TIME = "Shuffle digest Read time"
+  val HEADER_SHUFFLE_DIGEST_WRITE_TIME = "Shuffle Digest Write Time"
+  val HEADER_SHUFFLE_DIGEST_READ_TIME = "Shuffle Digest Read Time"
   val HEADER_ERROR = "Errors"
 
   private[ui] val COLUMN_TO_INDEX = Map(
