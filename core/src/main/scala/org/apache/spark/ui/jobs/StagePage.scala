@@ -254,14 +254,14 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
               <span data-toggle="tooltip"
                     title={ToolTips.DIGEST_WRITE_TIME} data-placement="right">
                 <input type="checkbox" name={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}/>
-                <span class="additional-metric-title">Digest Write Time</span>
+                <span class="additional-metric-title">Shuffle Digest Write Time</span>
               </span>
             </li>
             <li>
               <span data-toggle="tooltip"
                     title={ToolTips.DIGEST_READ_TIME} data-placement="right">
                 <input type="checkbox" name={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}/>
-                <span class="additional-metric-title">Digest Read Time</span>
+                <span class="additional-metric-title">Shuffle Digest Read Time</span>
               </span>
             </li>
           </ul>
