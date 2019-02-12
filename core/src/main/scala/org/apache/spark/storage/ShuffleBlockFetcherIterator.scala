@@ -427,26 +427,13 @@ final class ShuffleBlockFetcherIterator(
             var in = try {
               buf.createInputStream()
             } catch {
-              // The exception could be throwed by local shuffle block or remote downloaded block
+              // The exception could only be throwed by local shuffle block
               case e: IOException =>
                 assert(buf.isInstanceOf[FileSegmentManagedBuffer] ||
                   buf.isInstanceOf[DigestFileSegmentManagedBuffer])
+                logError("Failed to create input stream from local block", e)
                 buf.release()
-                if (address != blockManager.blockManagerId && !corruptedBlocks.contains(blockId)) {
-                  logError("Failed to create input stream from remote downloaded block " +
-                    "and try again", e)
-                  corruptedBlocks.add(blockId)
-                  fetchRequests += FetchRequest(address, Array((blockId, size)))
-                  result = null
-                  break()
-                } else {
-                  if (address == blockManager.blockManagerId) {
-                    logError("Failed to create input stream from local block", e)
-                  } else {
-                    logError("Failed to create input stream from remote downloaded block twice", e)
-                  }
-                  throwFetchFailedException(blockId, address, e)
-                }
+                throwFetchFailedException(blockId, address, e)
             }
 
             // detect inputStream  corrupt
