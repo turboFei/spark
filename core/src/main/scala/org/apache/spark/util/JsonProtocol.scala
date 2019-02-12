@@ -849,7 +849,8 @@ private[spark] object JsonProtocol {
         Utils.jsonOption(writeJson \ "Shuffle Records Written").map(_.extract[Long]).getOrElse(0L))
       writeMetrics.incWriteTime((writeJson \ "Shuffle Write Time").extract[Long])
       writeMetrics.incWriteDigestTime(
-        Utils.jsonOption(writeJson \ "Shuffle Digest Write Time").map(_.extract[Long]).getOrElse(0L))
+        Utils.jsonOption(writeJson \ "Shuffle Digest Write Time")
+          .map(_.extract[Long]).getOrElse(0L))
     }
 
     // Output metrics
