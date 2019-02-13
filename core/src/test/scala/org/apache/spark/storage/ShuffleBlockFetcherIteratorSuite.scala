@@ -339,16 +339,17 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
         Future {
           // Return the first block, and then fail.
           listener.onBlockFetchSuccess(
-            ShuffleBlockId(0, 1, 0).toString, blocks(ShuffleBlockId(0, 1, 0)))
+            ShuffleBlockId(0, 1, 0).toString, corruptBuffer)
           sem.release()
         }
       }
     })
 
-    // The next block is a corrupt shuffleBlock (the second and third are corrupt and retried)
-    val (id2, _) = iterator.next()
-    assert(id2 == ShuffleBlockId(0, 1, 0))
+    // The next block is corrupt local block (the second one is corrupt and retried)
+    intercept[FetchFailedException] { iterator.next() }
 
+    sem.acquire()
+    intercept[FetchFailedException] { iterator.next() }
   }
 
   test("big blocks are not checked for corruption") {
