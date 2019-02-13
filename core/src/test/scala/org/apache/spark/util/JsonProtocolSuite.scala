@@ -1136,13 +1136,13 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |      "Remote Bytes Read To Disk": 400,
       |      "Local Bytes Read": 1100,
       |      "Total Records Read": 10,
-      |      "Digest Read Time" : 0
+      |      "Shuffle Digest Read Time" : 0
       |    },
       |    "Shuffle Write Metrics": {
       |      "Shuffle Bytes Written": 1200,
       |      "Shuffle Write Time": 1500,
       |      "Shuffle Records Written": 12,
-      |      "Digest Write Time" : 0
+      |      "Shuffle Digest Write Time" : 0
       |    },
       |    "Input Metrics" : {
       |      "Bytes Read" : 0,
@@ -1239,13 +1239,13 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |      "Remote Bytes Read To Disk" : 0,
       |      "Local Bytes Read" : 0,
       |      "Total Records Read" : 0,
-      |      "Digest Read Time" : 0
+      |      "Shuffle Digest Read Time" : 0
       |    },
       |    "Shuffle Write Metrics": {
       |      "Shuffle Bytes Written": 1200,
       |      "Shuffle Write Time": 1500,
       |      "Shuffle Records Written": 12,
-      |      "Digest Write Time" : 0
+      |      "Shuffle Digest Write Time" : 0
       |    },
       |    "Input Metrics": {
       |      "Bytes Read": 2100,
@@ -1342,13 +1342,13 @@ private[spark] object JsonProtocolSuite extends Assertions {
       |      "Remote Bytes Read To Disk" : 0,
       |      "Local Bytes Read" : 0,
       |      "Total Records Read" : 0,
-      |      "Digest Read Time" : 0
+      |      "Shuffle Digest Read Time" : 0
       |    },
       |    "Shuffle Write Metrics": {
       |      "Shuffle Bytes Written" : 0,
       |      "Shuffle Write Time" : 0,
       |      "Shuffle Records Written" : 0,
-      |      "Digest Write Time" : 0
+      |      "Shuffle Digest Write Time" : 0
       |    },
       |    "Input Metrics": {
       |      "Bytes Read": 2100,
