@@ -650,6 +650,7 @@ object ShuffleBlockFetcherIterator {
    *             Size of remote block is used to calculate bytesInFlight.
    * @param buf `ManagedBuffer` for the content.
    * @param isNetworkReqDone Is this the last network request for this host in this fetch request.
+   * @param digest Is the digest of the result, default is -1L.
    */
   private[storage] case class SuccessFetchResult(
       blockId: BlockId,
@@ -674,6 +675,9 @@ object ShuffleBlockFetcherIterator {
       e: Throwable)
     extends FetchResult
 
+  /**
+   * An exception that the origin digest is not equal with the fetchResult's digest.
+   */
   private[spark] case  class CheckDigestFailedException(
       message: String,
       cause: Throwable = null)

@@ -35,6 +35,7 @@ public interface StreamCallback {
   /** Called when all data from the stream has been received. */
   void onComplete(String streamId) throws IOException;
 
+  /** Called with a extra digest when all data from the stream has been received. */
   default void onComplete(String streamId, long digest) throws IOException {
     onComplete(streamId);
   }

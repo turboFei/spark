@@ -32,6 +32,7 @@ public class ShuffleIndexInformation {
   /** offsets as long buffer */
   private final LongBuffer offsets;
   private final boolean hasDigest;
+  /** digests as long buffer */
   private final LongBuffer digests;
   private int size;
 
@@ -92,6 +93,7 @@ public class ShuffleIndexInformation {
   public ShuffleIndexRecord getIndex(int reduceId) {
     long offset = offsets.get(reduceId);
     long nextOffset = offsets.get(reduceId + 1);
+    /** default digest is -1. */
     long digest = hasDigest ? digests.get(reduceId) : -1L;
     return new ShuffleIndexRecord(offset, nextOffset - offset, digest);
   }

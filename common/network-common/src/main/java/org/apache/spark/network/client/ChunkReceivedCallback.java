@@ -36,6 +36,7 @@ public interface ChunkReceivedCallback {
    */
   void onSuccess(int chunkIndex, ManagedBuffer buffer);
 
+  /** Called with a extra digest parameter upon receipt of a particular chunk. */
   default void onSuccess(int chunkIndex, ManagedBuffer buffer, long digest) {
     onSuccess(chunkIndex, buffer);
   }
