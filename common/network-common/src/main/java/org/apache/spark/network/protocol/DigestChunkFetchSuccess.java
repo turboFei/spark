@@ -23,7 +23,8 @@ import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.buffer.NettyManagedBuffer;
 
 /**
- * Response to {@link ChunkFetchRequest} when a chunk exists and has been successfully fetched.
+ * Response to {@link ChunkFetchRequest} when a chunk exists with a digest and has been
+ * successfully fetched.
  *
  * Note that the server-side encoding of this messages does NOT include the buffer itself, as this
  * may be written by Netty in a more efficient manner (i.e., zero-copy write).

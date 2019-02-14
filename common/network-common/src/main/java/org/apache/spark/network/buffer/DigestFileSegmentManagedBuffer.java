@@ -24,7 +24,7 @@ import com.google.common.base.Objects;
 import org.apache.spark.network.util.TransportConf;
 
 /**
- * A {@link ManagedBuffer} backed by a segment in a file.
+ * A {@link ManagedBuffer} backed by a segment in a file with digest.
  */
 public final class DigestFileSegmentManagedBuffer extends FileSegmentManagedBuffer {
 
