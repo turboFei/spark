@@ -156,11 +156,9 @@ private class LiveTask(
         metrics.shuffleReadMetrics.remoteBytesReadToDisk,
         metrics.shuffleReadMetrics.localBytesRead,
         metrics.shuffleReadMetrics.recordsRead,
-        metrics.shuffleReadMetrics.readDigestTime,
         metrics.shuffleWriteMetrics.bytesWritten,
         metrics.shuffleWriteMetrics.writeTime,
-        metrics.shuffleWriteMetrics.recordsWritten,
-        metrics.shuffleWriteMetrics.writeDigestTime)
+        metrics.shuffleWriteMetrics.recordsWritten)
 
       this.metrics = newMetrics
 
@@ -219,11 +217,10 @@ private class LiveTask(
       metrics.shuffleReadMetrics.remoteBytesReadToDisk,
       metrics.shuffleReadMetrics.localBytesRead,
       metrics.shuffleReadMetrics.recordsRead,
-      metrics.shuffleReadMetrics.digestReadTime,
       metrics.shuffleWriteMetrics.bytesWritten,
       metrics.shuffleWriteMetrics.writeTime,
       metrics.shuffleWriteMetrics.recordsWritten,
-      metrics.shuffleWriteMetrics.digestWriteTime,
+
       stageId,
       stageAttemptId)
   }
@@ -622,11 +619,9 @@ private object LiveEntityHelpers {
       shuffleRemoteBytesReadToDisk: Long,
       shuffleLocalBytesRead: Long,
       shuffleRecordsRead: Long,
-      shuffleDigestReadTime: Long,
       shuffleBytesWritten: Long,
       shuffleWriteTime: Long,
-      shuffleRecordsWritten: Long,
-      shuffleDigestWriteTime: Long): v1.TaskMetrics = {
+      shuffleRecordsWritten: Long): v1.TaskMetrics = {
     new v1.TaskMetrics(
       executorDeserializeTime,
       executorDeserializeCpuTime,
@@ -651,22 +646,18 @@ private object LiveEntityHelpers {
         shuffleRemoteBytesRead,
         shuffleRemoteBytesReadToDisk,
         shuffleLocalBytesRead,
-        shuffleRecordsRead,
-        shuffleDigestReadTime
-        ),
+        shuffleRecordsRead),
       new v1.ShuffleWriteMetrics(
         shuffleBytesWritten,
         shuffleWriteTime,
-        shuffleRecordsWritten,
-        shuffleDigestWriteTime))
+        shuffleRecordsWritten))
   }
   // scalastyle:on argcount
 
   def createMetrics(default: Long): v1.TaskMetrics = {
     createMetrics(default, default, default, default, default, default, default, default,
       default, default, default, default, default, default, default, default,
-      default, default, default, default, default, default, default, default,
-      default, default)
+      default, default, default, default, default, default, default, default)
   }
 
   /** Add m2 values to m1. */
@@ -701,11 +692,9 @@ private object LiveEntityHelpers {
         m2.shuffleReadMetrics.remoteBytesReadToDisk * mult,
       m1.shuffleReadMetrics.localBytesRead + m2.shuffleReadMetrics.localBytesRead * mult,
       m1.shuffleReadMetrics.recordsRead + m2.shuffleReadMetrics.recordsRead * mult,
-      m1.shuffleReadMetrics.digestReadTime + m2.shuffleReadMetrics.digestReadTime * mult,
       m1.shuffleWriteMetrics.bytesWritten + m2.shuffleWriteMetrics.bytesWritten * mult,
       m1.shuffleWriteMetrics.writeTime + m2.shuffleWriteMetrics.writeTime * mult,
-      m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult,
-      m1.shuffleWriteMetrics.digestWriteTime + m2.shuffleWriteMetrics.digestWriteTime * mult)
+      m1.shuffleWriteMetrics.recordsWritten + m2.shuffleWriteMetrics.recordsWritten * mult)
   }
 
 }

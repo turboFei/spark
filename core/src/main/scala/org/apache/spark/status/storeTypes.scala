@@ -133,11 +133,9 @@ private[spark] object TaskIndexNames {
   final val SHUFFLE_REMOTE_READS_TO_DISK = "srbd"
   final val SHUFFLE_TOTAL_READS = "stby"
   final val SHUFFLE_TOTAL_BLOCKS = "stbl"
-  final val DIGEST_READ_TIME = "digest_read"
   final val SHUFFLE_WRITE_RECORDS = "swr"
   final val SHUFFLE_WRITE_SIZE = "sws"
   final val SHUFFLE_WRITE_TIME = "swt"
-  final val DIGEST_WRITE_TIME = "digest_write"
   final val STAGE = "stage"
   final val STATUS = "sta"
   final val TASK_INDEX = "idx"
@@ -224,16 +222,12 @@ private[spark] class TaskDataWrapper(
     val shuffleLocalBytesRead: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_READ_RECORDS, parent = TaskIndexNames.STAGE)
     val shuffleRecordsRead: Long,
-    @KVIndexParam(value = TaskIndexNames.DIGEST_READ_TIME, parent = TaskIndexNames.STAGE)
-    val shuffleDigestReadTime: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_SIZE, parent = TaskIndexNames.STAGE)
     val shuffleBytesWritten: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_TIME, parent = TaskIndexNames.STAGE)
     val shuffleWriteTime: Long,
     @KVIndexParam(value = TaskIndexNames.SHUFFLE_WRITE_RECORDS, parent = TaskIndexNames.STAGE)
     val shuffleRecordsWritten: Long,
-    @KVIndexParam(value = TaskIndexNames.DIGEST_WRITE_TIME, parent = TaskIndexNames.STAGE)
-    val shuffleDigestWriteTime: Long,
 
     val stageId: Int,
     val stageAttemptId: Int) {
@@ -266,13 +260,11 @@ private[spark] class TaskDataWrapper(
           shuffleRemoteBytesRead,
           shuffleRemoteBytesReadToDisk,
           shuffleLocalBytesRead,
-          shuffleRecordsRead,
-          shuffleDigestReadTime),
+          shuffleRecordsRead),
         new ShuffleWriteMetrics(
           shuffleBytesWritten,
           shuffleWriteTime,
-          shuffleRecordsWritten,
-          shuffleDigestWriteTime)))
+          shuffleRecordsWritten)))
     } else {
       None
     }
@@ -483,12 +475,10 @@ private[spark] class CachedQuantile(
     val shuffleRemoteBytesRead: Double,
     val shuffleRemoteBytesReadToDisk: Double,
     val shuffleTotalBlocksFetched: Double,
-    val shuffleDigestReadTime: Double,
 
     val shuffleWriteBytes: Double,
     val shuffleWriteRecords: Double,
-    val shuffleWriteTime: Double,
-    val shuffleDigestWriteTime: Double) {
+    val shuffleWriteTime: Double) {
 
   @KVIndex @JsonIgnore
   def id: Array[Any] = Array(stageId, stageAttemptId, quantile)

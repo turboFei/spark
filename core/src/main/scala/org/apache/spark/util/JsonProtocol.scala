@@ -347,13 +347,11 @@ private[spark] object JsonProtocol {
         ("Remote Bytes Read" -> taskMetrics.shuffleReadMetrics.remoteBytesRead) ~
         ("Remote Bytes Read To Disk" -> taskMetrics.shuffleReadMetrics.remoteBytesReadToDisk) ~
         ("Local Bytes Read" -> taskMetrics.shuffleReadMetrics.localBytesRead) ~
-        ("Total Records Read" -> taskMetrics.shuffleReadMetrics.recordsRead) ~
-        ("Shuffle Digest Read Time" -> taskMetrics.shuffleReadMetrics.readDigestTime)
+        ("Total Records Read" -> taskMetrics.shuffleReadMetrics.recordsRead)
     val shuffleWriteMetrics: JValue =
       ("Shuffle Bytes Written" -> taskMetrics.shuffleWriteMetrics.bytesWritten) ~
         ("Shuffle Write Time" -> taskMetrics.shuffleWriteMetrics.writeTime) ~
-        ("Shuffle Records Written" -> taskMetrics.shuffleWriteMetrics.recordsWritten) ~
-        ("Shuffle Digest Write Time" -> taskMetrics.shuffleWriteMetrics.writeDigestTime)
+        ("Shuffle Records Written" -> taskMetrics.shuffleWriteMetrics.recordsWritten)
     val inputMetrics: JValue =
       ("Bytes Read" -> taskMetrics.inputMetrics.bytesRead) ~
         ("Records Read" -> taskMetrics.inputMetrics.recordsRead)
@@ -835,12 +833,10 @@ private[spark] object JsonProtocol {
       readMetrics.incFetchWaitTime((readJson \ "Fetch Wait Time").extract[Long])
       readMetrics.incRecordsRead(
         Utils.jsonOption(readJson \ "Total Records Read").map(_.extract[Long]).getOrElse(0L))
-      readMetrics.incReadDigestTime(
-        Utils.jsonOption(readJson \ "Shuffle Digest Read Time").map(_.extract[Long]).getOrElse(0L))
       metrics.mergeShuffleReadMetrics()
     }
 
-    // Shuffle write metricst
+    // Shuffle write metrics
     // TODO: Drop the redundant "Shuffle" since it's inconsistent with related classes.
     Utils.jsonOption(json \ "Shuffle Write Metrics").foreach { writeJson =>
       val writeMetrics = metrics.shuffleWriteMetrics
@@ -848,9 +844,6 @@ private[spark] object JsonProtocol {
       writeMetrics.incRecordsWritten(
         Utils.jsonOption(writeJson \ "Shuffle Records Written").map(_.extract[Long]).getOrElse(0L))
       writeMetrics.incWriteTime((writeJson \ "Shuffle Write Time").extract[Long])
-      writeMetrics.incWriteDigestTime(
-        Utils.jsonOption(writeJson \ "Shuffle Digest Write Time")
-          .map(_.extract[Long]).getOrElse(0L))
     }
 
     // Output metrics

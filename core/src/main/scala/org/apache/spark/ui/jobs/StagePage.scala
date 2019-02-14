@@ -47,9 +47,7 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
             ("executor-runtime-proportion", "Executor Computing Time"),
             ("shuffle-write-time-proportion", "Shuffle Write Time"),
             ("serialization-time-proportion", "Result Serialization Time"),
-            ("getting-result-time-proportion", "Getting Result Time"),
-            ("digest-write-time-proportion", "Digest Write Time"),
-            ("digest-read-time-proportion", "Digest Read Time"))
+            ("getting-result-time-proportion", "Getting Result Time"))
 
           legendPairs.zipWithIndex.map {
             case ((classAttr, name), index) =>
@@ -250,20 +248,6 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
                 <span class="additional-metric-title">Peak Execution Memory</span>
               </span>
             </li>
-            <li>
-              <span data-toggle="tooltip"
-                    title={ToolTips.DIGEST_WRITE_TIME} data-placement="right">
-                <input type="checkbox" name={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}/>
-                <span class="additional-metric-title">Shuffle Digest Write Time</span>
-              </span>
-            </li>
-            <li>
-              <span data-toggle="tooltip"
-                    title={ToolTips.DIGEST_READ_TIME} data-placement="right">
-                <input type="checkbox" name={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}/>
-                <span class="additional-metric-title">Shuffle Digest Read Time</span>
-              </span>
-            </li>
           </ul>
         </div>
       </div>
@@ -343,12 +327,6 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         }
       }
 
-      def digestTimeQuantiles(data: IndexedSeq[Double]): Seq[Node] = {
-        data.map{nanomiles =>
-          <td>{UIUtils.formatDuration(TimeUnit.NANOSECONDS.toMillis(nanomiles.toLong))}</td>
-        }
-      }
-
       def sizeQuantiles(data: IndexedSeq[Double]): Seq[Node] = {
         data.map { size =>
           <td>{Utils.bytesToString(size.toLong)}</td>
@@ -388,13 +366,6 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
 
       val peakExecutionMemoryQuantiles = titleCell("Peak Execution Memory",
         ToolTips.PEAK_EXECUTION_MEMORY) ++ sizeQuantiles(metrics.peakExecutionMemory)
-
-      val digestWriteTimeQuantiles = titleCell("Shuffle Digest Write Time",
-        ToolTips.DIGEST_WRITE_TIME) ++
-        digestTimeQuantiles(metrics.shuffleWriteMetrics.digestWriteTime)
-
-      val digestReadTimeQuantiles = titleCell("Shuffle Digest Read Time",
-        ToolTips.DIGEST_READ_TIME) ++ digestTimeQuantiles(metrics.shuffleReadMetrics.digestReadTime)
 
       // The scheduler delay includes the network delay to send the task to the worker
       // machine and to send back the result (but not the time to fetch the task result,
@@ -472,21 +443,7 @@ private[ui] class StagePage(parent: StagesTab, store: AppStatusStore) extends We
         },
         if (hasShuffleWrite(stageData)) <tr>{shuffleWriteQuantiles}</tr> else Nil,
         if (hasBytesSpilled(stageData)) <tr>{memoryBytesSpilledQuantiles}</tr> else Nil,
-        if (hasBytesSpilled(stageData)) <tr>{diskBytesSpilledQuantiles}</tr> else Nil,
-        if (hasShuffleWrite(stageData)) {
-          <tr class={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}>
-            {digestWriteTimeQuantiles}
-          </tr>
-        } else {
-          Nil
-        },
-        if (hasShuffleRead(stageData)) {
-          <tr class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
-            {digestReadTimeQuantiles}
-          </tr>
-        } else {
-          Nil
-        })
+        if (hasBytesSpilled(stageData)) <tr>{diskBytesSpilledQuantiles}</tr> else Nil)
 
       val quantileHeaders = Seq("Metric", "Min", "25th percentile", "Median", "75th percentile",
         "Max")
@@ -816,16 +773,6 @@ private[ui] class TaskPagedTable(
         } else {
           Nil
         }} ++
-        {if (hasShuffleWrite(stage)) {
-          Seq((HEADER_SHUFFLE_DIGEST_WRITE_TIME, TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME))
-        } else {
-          Nil
-        }} ++
-        {if (hasShuffleRead(stage)) {
-          Seq((HEADER_SHUFFLE_DIGEST_READ_TIME, TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME))
-        } else {
-          Nil
-        }} ++
         Seq((HEADER_ERROR, ""))
 
     if (!taskHeadersAndCssClasses.map(_._1).contains(sortColumn)) {
@@ -963,18 +910,6 @@ private[ui] class TaskPagedTable(
         <td>{formatBytes(task.taskMetrics.map(_.memoryBytesSpilled))}</td>
         <td>{formatBytes(task.taskMetrics.map(_.diskBytesSpilled))}</td>
       }}
-      {if (hasShuffleWrite(stage)) {
-      <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_WRITE_TIME}>
-        {formatDuration(task.taskMetrics.map{ m =>
-           TimeUnit.NANOSECONDS.toMillis(m.shuffleWriteMetrics.digestWriteTime)})}
-      </td>
-      }}
-      {if (hasShuffleRead(stage)) {
-         <td class={TaskDetailsClassNames.SHUFFLE_DIGEST_READ_TIME}>
-            {formatDuration(task.taskMetrics.map{ m =>
-                TimeUnit.NANOSECONDS.toMillis(m.shuffleReadMetrics.digestReadTime)})}
-         </td>
-      }}
       {errorMessageCell(task.errorMessage.getOrElse(""))}
     </tr>
   }
@@ -1046,8 +981,6 @@ private[ui] object ApiHelper {
   val HEADER_SHUFFLE_WRITE_SIZE = "Shuffle Write Size / Records"
   val HEADER_MEM_SPILL = "Shuffle Spill (Memory)"
   val HEADER_DISK_SPILL = "Shuffle Spill (Disk)"
-  val HEADER_SHUFFLE_DIGEST_WRITE_TIME = "Shuffle Digest Write Time"
-  val HEADER_SHUFFLE_DIGEST_READ_TIME = "Shuffle Digest Read Time"
   val HEADER_ERROR = "Errors"
 
   private[ui] val COLUMN_TO_INDEX = Map(
@@ -1076,8 +1009,6 @@ private[ui] object ApiHelper {
     HEADER_SHUFFLE_WRITE_SIZE -> TaskIndexNames.SHUFFLE_WRITE_SIZE,
     HEADER_MEM_SPILL -> TaskIndexNames.MEM_SPILL,
     HEADER_DISK_SPILL -> TaskIndexNames.DISK_SPILL,
-    HEADER_SHUFFLE_DIGEST_WRITE_TIME -> TaskIndexNames.DIGEST_WRITE_TIME,
-    HEADER_SHUFFLE_DIGEST_READ_TIME -> TaskIndexNames.DIGEST_READ_TIME,
     HEADER_ERROR -> TaskIndexNames.ERROR)
 
   def hasAccumulators(stageData: StageData): Boolean = {

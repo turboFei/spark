@@ -22,7 +22,6 @@ import java.nio.channels.Channels
 import java.nio.file.Files
 
 import org.apache.spark.{SparkConf, SparkEnv}
-import org.apache.spark.executor.ShuffleWriteMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
 import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
@@ -157,20 +156,10 @@ private[spark] class IndexShuffleBlockResolver(
    * Note: the `lengths` will be updated to match the existing index file if use the existing ones.
    */
   def writeIndexFileAndCommit(
-       shuffleId: Int,
-       mapId: Int,
-       lengths: Array[Long],
-       dataTmp: File): Unit = {
-    writeIndexFileAndCommit(shuffleId, mapId, lengths, dataTmp, null)
-  }
-
-  // For record the digestTime
-  def writeIndexFileAndCommit(
       shuffleId: Int,
       mapId: Int,
       lengths: Array[Long],
-      dataTmp: File,
-      shuffleWriteMetrics: ShuffleWriteMetrics): Unit = {
+      dataTmp: File): Unit = {
     val indexFile = getIndexFile(shuffleId, mapId)
     val indexTmp = Utils.tempFileWith(indexFile)
     try {
@@ -194,7 +183,6 @@ private[spark] class IndexShuffleBlockResolver(
           out.writeLong(offset)
         }
         if (digestEnable) {
-          val digestStartTime = System.nanoTime()
           for (i <- (0 until lengths.length)) {
             val length = lengths(i)
             if (length == 0 || dataIn == null) {
@@ -210,9 +198,6 @@ private[spark] class IndexShuffleBlockResolver(
                   logError(s"NESPARK-160: error when make digest for $dataTmp", e)
               }
             }
-          }
-          if (shuffleWriteMetrics != null) {
-            shuffleWriteMetrics.incWriteDigestTime(System.nanoTime() - digestStartTime)
           }
         }
       } {

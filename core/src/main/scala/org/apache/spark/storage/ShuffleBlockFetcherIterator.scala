@@ -27,7 +27,6 @@ import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
 import scala.util.control.Breaks._
 
 import org.apache.spark.{SparkException, TaskContext}
-import org.apache.spark.executor.TempShuffleReadMetrics
 import org.apache.spark.internal.Logging
 import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle._
@@ -72,8 +71,7 @@ final class ShuffleBlockFetcherIterator(
     maxBlocksInFlightPerAddress: Int,
     maxReqSizeShuffleToMem: Long,
     detectCorrupt: Boolean,
-    digestEnable: Boolean = false,
-    shuffleReadMetrics: TempShuffleReadMetrics = null)
+    digestEnable: Boolean = false)
   extends Iterator[(BlockId, InputStream)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._
@@ -439,7 +437,6 @@ final class ShuffleBlockFetcherIterator(
             // detect inputStream  corrupt
             if (digestEnable) {
               if (digest >= 0) {
-                val digestStartTime = System.nanoTime()
                 val checkDigest = try {
                   DigestUtils.getDigest(in)
                 } catch {
@@ -447,9 +444,6 @@ final class ShuffleBlockFetcherIterator(
                     logError("NESPARK-160: Error when checking digest", e)
                     buf.release()
                     throwFetchFailedException(blockId, address, e)
-                }
-                if (shuffleReadMetrics != null) {
-                  shuffleReadMetrics.incReadDigestTime(System.nanoTime() - digestStartTime)
                 }
 
                 if (digest != checkDigest) {
@@ -499,7 +493,6 @@ final class ShuffleBlockFetcherIterator(
                 case e: IOException =>
                   buf.release()
                   if (buf.isInstanceOf[FileSegmentManagedBuffer]
-                    || buf.isInstanceOf[DigestFileSegmentManagedBuffer]
                     || corruptedBlocks.contains(blockId)) {
                     throwFetchFailedException(blockId, address, e)
                   } else {
