@@ -328,15 +328,6 @@
   "taskLocality" : "PROCESS_LOCAL",
   "speculative" : false,
   "accumulatorUpdates" : [ {
-
-
-
-
-
-
-
-
-
     "id" : 1,
     "name" : "my counter",
     "update" : "978",

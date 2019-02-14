@@ -499,7 +499,6 @@ final class ShuffleBlockFetcherIterator(
                 case e: IOException =>
                   buf.release()
                   if (buf.isInstanceOf[FileSegmentManagedBuffer]
-                    || buf.isInstanceOf[DigestFileSegmentManagedBuffer]
                     || corruptedBlocks.contains(blockId)) {
                     throwFetchFailedException(blockId, address, e)
                   } else {
