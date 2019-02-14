@@ -17,11 +17,11 @@
 
 package org.apache.spark.network.buffer;
 
+import java.io.File;
 
 import com.google.common.base.Objects;
-import org.apache.spark.network.util.TransportConf;
 
-import java.io.*;
+import org.apache.spark.network.util.TransportConf;
 
 /**
  * A {@link ManagedBuffer} backed by a segment in a file.
