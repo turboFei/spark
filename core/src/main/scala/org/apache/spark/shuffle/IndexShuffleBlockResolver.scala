@@ -24,8 +24,9 @@ import java.nio.file.Files
 import org.apache.spark.{SparkConf, SparkEnv}
 import org.apache.spark.internal.Logging
 import org.apache.spark.io.NioBufferedFileInputStream
-import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.netty.SparkTransportConf
+import org.apache.spark.network.util.{DigestUtils, LimitedInputStream}
 import org.apache.spark.shuffle.IndexShuffleBlockResolver.NOOP_REDUCE_ID
 import org.apache.spark.storage._
 import org.apache.spark.util.Utils
@@ -50,6 +51,10 @@ private[spark] class IndexShuffleBlockResolver(
   private lazy val blockManager = Option(_blockManager).getOrElse(SparkEnv.get.blockManager)
 
   private val transportConf = SparkTransportConf.fromSparkConf(conf, "shuffle")
+
+  // The digest conf for shuffle block check
+  private final val digestEnable = conf.getBoolean("spark.shuffle.digest.enable", false);
+  private final val digestLength = DigestUtils.getDigestLength()
 
   def getDataFile(shuffleId: Int, mapId: Int): File = {
     blockManager.diskBlockManager.getFile(ShuffleDataBlockId(shuffleId, mapId, NOOP_REDUCE_ID))
@@ -82,12 +87,15 @@ private[spark] class IndexShuffleBlockResolver(
    * Check whether the given index and data files match each other.
    * If so, return the partition lengths in the data file. Otherwise return null.
    */
-  private def checkIndexAndDataFile(index: File, data: File, blocks: Int): Array[Long] = {
+  private def checkIndexAndDataFile(index: File, data: File, blocks: Int, digests: Array[Long]):
+  (Array[Long], Array[Long]) = {
     // the index file should have `block + 1` longs as offset.
-    if (index.length() != (blocks + 1) * 8L) {
+    if ((!digestEnable && index.length() != (blocks + 1) * 8L) ||
+      (digestEnable && index.length() != blocks * (8L + digestLength) + 8L + 1L)) {
       return null
     }
     val lengths = new Array[Long](blocks)
+    val digestArr = new Array[Long](blocks)
     // Read the lengths of blocks
     val in = try {
       new DataInputStream(new NioBufferedFileInputStream(index))
@@ -97,6 +105,13 @@ private[spark] class IndexShuffleBlockResolver(
     }
     try {
       // Convert the offsets into lengths of each block
+      if (digestEnable) {
+        val flag = in.readByte()
+        // the flag for digestEnable should be 1
+        if (flag != 1) {
+          return null
+        }
+      }
       var offset = in.readLong()
       if (offset != 0L) {
         return null
@@ -108,6 +123,13 @@ private[spark] class IndexShuffleBlockResolver(
         offset = off
         i += 1
       }
+      if (digestEnable) {
+        i = 0
+        while (i < blocks) {
+          digestArr(i) = in.readLong()
+          i += 1
+        }
+      }
     } catch {
       case e: IOException =>
         return null
@@ -116,8 +138,8 @@ private[spark] class IndexShuffleBlockResolver(
     }
 
     // the size of data file should match with index file
-    if (data.length() == lengths.sum) {
-      lengths
+    if (data.length() == lengths.sum && !(0 until blocks).exists(i => digests(i) != digestArr(i))) {
+      (lengths, digestArr)
     } else {
       null
     }
@@ -142,7 +164,17 @@ private[spark] class IndexShuffleBlockResolver(
     val indexTmp = Utils.tempFileWith(indexFile)
     try {
       val out = new DataOutputStream(new BufferedOutputStream(new FileOutputStream(indexTmp)))
+      val dataIn = if (dataTmp != null && dataTmp.exists()) {
+        new FileInputStream(dataTmp)
+      } else {
+        null
+      }
+      val digests = new Array[Long](lengths.length)
       Utils.tryWithSafeFinally {
+        if (digestEnable) {
+          // we write a byte present digest enable
+          out.writeByte(1)
+        }
         // We take in lengths of each block, need to convert it to offsets.
         var offset = 0L
         out.writeLong(offset)
@@ -150,7 +182,28 @@ private[spark] class IndexShuffleBlockResolver(
           offset += length
           out.writeLong(offset)
         }
+        if (digestEnable) {
+          for (i <- (0 until lengths.length)) {
+            val length = lengths(i)
+            if (length == 0 || dataIn == null) {
+              digests(i) = -1L
+              out.writeLong(-1L)
+            } else {
+              try {
+                val digest = DigestUtils.getDigest(new LimitedInputStream(dataIn, length))
+                digests(i) = digest
+                out.writeLong(digest)
+              } catch {
+                case e: IOException =>
+                  logError(s"NESPARK-160: error when make digest for $dataTmp", e)
+              }
+            }
+          }
+        }
       } {
+        if (dataIn != null) {
+          dataIn.close()
+        }
         out.close()
       }
 
@@ -158,11 +211,15 @@ private[spark] class IndexShuffleBlockResolver(
       // There is only one IndexShuffleBlockResolver per executor, this synchronization make sure
       // the following check and rename are atomic.
       synchronized {
-        val existingLengths = checkIndexAndDataFile(indexFile, dataFile, lengths.length)
-        if (existingLengths != null) {
+        val existingLengthsDigests = checkIndexAndDataFile(indexFile, dataFile, lengths.length,
+          digests)
+        if (existingLengthsDigests != null) {
           // Another attempt for the same task has already written our map outputs successfully,
           // so just use the existing partition lengths and delete our temporary map outputs.
+          val existingLengths = existingLengthsDigests._1
+          val existingDigests = existingLengthsDigests._2
           System.arraycopy(existingLengths, 0, lengths, 0, lengths.length)
+          System.arraycopy(existingDigests, 0, digests, 0, digests.length)
           if (dataTmp != null && dataTmp.exists()) {
             dataTmp.delete()
           }
@@ -203,22 +260,46 @@ private[spark] class IndexShuffleBlockResolver(
     // class of issue from re-occurring in the future which is why they are left here even though
     // SPARK-22982 is fixed.
     val channel = Files.newByteChannel(indexFile.toPath)
-    channel.position(blockId.reduceId * 8L)
+    var preOffset = 0
+    var blocks = (indexFile.length() - 8) / 8
+    if (digestEnable) {
+      preOffset = 1
+      blocks = (indexFile.length() - 1 - 8) / (8 + digestLength)
+    }
+    channel.position(preOffset + blockId.reduceId * 8L)
     val in = new DataInputStream(Channels.newInputStream(channel))
     try {
       val offset = in.readLong()
       val nextOffset = in.readLong()
       val actualPosition = channel.position()
-      val expectedPosition = blockId.reduceId * 8L + 16
+      val expectedPosition = blockId.reduceId * 8L + 16 + preOffset
       if (actualPosition != expectedPosition) {
         throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
           s"expected $expectedPosition but actual position was $actualPosition.")
       }
-      new FileSegmentManagedBuffer(
-        transportConf,
-        getDataFile(blockId.shuffleId, blockId.mapId),
-        offset,
-        nextOffset - offset)
+      if (digestEnable) {
+        channel.position(preOffset + (blocks + 1) * 8L + blockId.reduceId * digestLength)
+        val digest = in.readLong()
+        val actualDigestPosition = channel.position()
+        val expectedDigestLength = preOffset + (blocks + 1) * 8L +
+          (blockId.reduceId + 1) * digestLength
+        if (actualDigestPosition != expectedDigestLength) {
+          throw new Exception(s"SPARK-22982: Incorrect channel position after index file reads: " +
+            s"expected $expectedDigestLength but actual position was $actualDigestPosition.")
+        }
+        new DigestFileSegmentManagedBuffer(
+          transportConf,
+          getDataFile(blockId.shuffleId, blockId.mapId),
+          offset,
+          nextOffset - offset,
+          digest)
+      } else {
+        new FileSegmentManagedBuffer(
+          transportConf,
+          getDataFile(blockId.shuffleId, blockId.mapId),
+          offset,
+          nextOffset - offset)
+      }
     } finally {
       in.close()
     }

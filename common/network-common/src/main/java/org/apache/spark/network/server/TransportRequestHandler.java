@@ -26,6 +26,7 @@ import io.netty.channel.ChannelFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.buffer.NioManagedBuffer;
 import org.apache.spark.network.client.RpcResponseCallback;
@@ -33,6 +34,8 @@ import org.apache.spark.network.client.TransportClient;
 import org.apache.spark.network.protocol.ChunkFetchRequest;
 import org.apache.spark.network.protocol.ChunkFetchFailure;
 import org.apache.spark.network.protocol.ChunkFetchSuccess;
+import org.apache.spark.network.protocol.DigestChunkFetchSuccess;
+import org.apache.spark.network.protocol.DigestStreamResponse;
 import org.apache.spark.network.protocol.Encodable;
 import org.apache.spark.network.protocol.OneWayMessage;
 import org.apache.spark.network.protocol.RequestMessage;
@@ -143,9 +146,16 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
     }
 
     streamManager.chunkBeingSent(req.streamChunkId.streamId);
-    respond(new ChunkFetchSuccess(req.streamChunkId, buf)).addListener(future -> {
-      streamManager.chunkSent(req.streamChunkId.streamId);
-    });
+    if (buf instanceof DigestFileSegmentManagedBuffer) {
+      respond(new DigestChunkFetchSuccess(req.streamChunkId, buf,
+              ((DigestFileSegmentManagedBuffer) buf).getDigest())).addListener(future -> {
+        streamManager.chunkSent(req.streamChunkId.streamId);
+      });
+    } else {
+      respond(new ChunkFetchSuccess(req.streamChunkId, buf)).addListener(future -> {
+        streamManager.chunkSent(req.streamChunkId.streamId);
+      });
+    }
   }
 
   private void processStreamRequest(final StreamRequest req) {
@@ -173,9 +183,16 @@ public class TransportRequestHandler extends MessageHandler<RequestMessage> {
 
     if (buf != null) {
       streamManager.streamBeingSent(req.streamId);
-      respond(new StreamResponse(req.streamId, buf.size(), buf)).addListener(future -> {
-        streamManager.streamSent(req.streamId);
-      });
+      if (buf instanceof DigestFileSegmentManagedBuffer) {
+        respond(new DigestStreamResponse(req.streamId, buf.size(), buf,
+                ((DigestFileSegmentManagedBuffer) buf).getDigest())).addListener(future -> {
+          streamManager.streamSent(req.streamId);
+        });
+      } else {
+        respond(new StreamResponse(req.streamId, buf.size(), buf)).addListener(future -> {
+          streamManager.streamSent(req.streamId);
+        });
+      }
     } else {
       respond(new StreamFailure(req.streamId, String.format(
         "Stream '%s' was not found.", req.streamId)));
