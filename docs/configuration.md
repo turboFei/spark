@@ -772,6 +772,37 @@ Apart from these, the following properties are also available, and may be useful
     When we fail to register to the external shuffle service, we will retry for maxAttempts times.
   </td>
 </tr>
+<tr>
+  <td><code>spark.shuffle.digest.enable</code></td>
+  <td>false</td>
+  <td>
+    The parameter to control whether check the transmitted data during shuffle.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.io.encryption.enabled</code></td>
+  <td>false</td>
+  <td>
+    Enable IO encryption. Currently supported by all modes except Mesos. It's recommended that RPC encryption
+    be enabled when using this feature.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.io.encryption.keySizeBits</code></td>
+  <td>128</td>
+  <td>
+    IO encryption key size in bits. Supported values are 128, 192 and 256.
+  </td>
+</tr>
+<tr>
+  <td><code>spark.io.encryption.keygen.algorithm</code></td>
+  <td>HmacSHA1</td>
+  <td>
+    The algorithm to use when generating the IO encryption key. The supported algorithms are
+    described in the KeyGenerator section of the Java Cryptography Architecture Standard Algorithm
+    Name Documentation.
+  </td>
+</tr>
 </table>
 
 ### Spark UI
