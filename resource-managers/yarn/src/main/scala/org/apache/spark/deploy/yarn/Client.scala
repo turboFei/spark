@@ -1481,8 +1481,8 @@ private object Client extends Logging {
   }
 
   /**
-    * check if spark atlas plugin is enabled
-    */
+   * check if spark atlas plugin is enabled
+   */
   private def checkAtlasEnable(sparkConf: SparkConf): Boolean = {
     val atlasExt = "com.hortonworks.spark.atlas.SparkAtlasEventTracker"
     sparkConf.getOption("spark.sql.queryExecutionListeners").contains(atlasExt)
