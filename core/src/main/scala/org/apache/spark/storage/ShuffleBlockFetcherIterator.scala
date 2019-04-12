@@ -24,12 +24,13 @@ import javax.annotation.concurrent.GuardedBy
 
 import scala.collection.mutable
 import scala.collection.mutable.{ArrayBuffer, HashMap, HashSet, Queue}
+import scala.util.control.Breaks._
 
 import org.apache.spark.{SparkException, TaskContext}
 import org.apache.spark.internal.Logging
-import org.apache.spark.network.buffer.{FileSegmentManagedBuffer, ManagedBuffer}
+import org.apache.spark.network.buffer.{DigestFileSegmentManagedBuffer, FileSegmentManagedBuffer, ManagedBuffer}
 import org.apache.spark.network.shuffle._
-import org.apache.spark.network.util.TransportConf
+import org.apache.spark.network.util.{DigestUtils, TransportConf}
 import org.apache.spark.shuffle.FetchFailedException
 import org.apache.spark.util.Utils
 import org.apache.spark.util.io.ChunkedByteBufferOutputStream
@@ -69,7 +70,8 @@ final class ShuffleBlockFetcherIterator(
     maxReqsInFlight: Int,
     maxBlocksInFlightPerAddress: Int,
     maxReqSizeShuffleToMem: Long,
-    detectCorrupt: Boolean)
+    detectCorrupt: Boolean,
+    digestEnable: Boolean = false)
   extends Iterator[(BlockId, InputStream)] with DownloadFileManager with Logging {
 
   import ShuffleBlockFetcherIterator._
@@ -193,7 +195,7 @@ final class ShuffleBlockFetcherIterator(
     while (iter.hasNext) {
       val result = iter.next()
       result match {
-        case SuccessFetchResult(_, address, _, buf, _) =>
+        case SuccessFetchResult(_, address, _, buf, _, _) =>
           if (address != blockManager.blockManagerId) {
             shuffleMetrics.incRemoteBytesRead(buf.size)
             if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
@@ -225,7 +227,10 @@ final class ShuffleBlockFetcherIterator(
     val address = req.address
 
     val blockFetchingListener = new BlockFetchingListener {
-      override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
+
+      // for the shuffle fetching listener, only need to implement onBlockFetchSuccess with digest
+      override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer,
+          digest: Long): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
         // i.e. cleanup() has not been called yet.
         ShuffleBlockFetcherIterator.this.synchronized {
@@ -235,11 +240,15 @@ final class ShuffleBlockFetcherIterator(
             buf.retain()
             remainingBlocks -= blockId
             results.put(new SuccessFetchResult(BlockId(blockId), address, sizeMap(blockId), buf,
-              remainingBlocks.isEmpty))
+              remainingBlocks.isEmpty, digest))
             logDebug("remainingBlocks: " + remainingBlocks)
           }
         }
         logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
+      }
+
+      override def onBlockFetchSuccess(blockId: String, data: ManagedBuffer): Unit = {
+        onBlockFetchSuccess(blockId, data, -1L)
       }
 
       override def onBlockFetchFailure(blockId: String, e: Throwable): Unit = {
@@ -395,63 +404,108 @@ final class ShuffleBlockFetcherIterator(
       shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
       result match {
-        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone) =>
-          if (address != blockManager.blockManagerId) {
-            numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
-            shuffleMetrics.incRemoteBytesRead(buf.size)
-            if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
-              shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+        case r @ SuccessFetchResult(blockId, address, size, buf, isNetworkReqDone, digest) =>
+          breakable {
+            if (address != blockManager.blockManagerId) {
+              numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
+              shuffleMetrics.incRemoteBytesRead(buf.size)
+              if (buf.isInstanceOf[FileSegmentManagedBuffer]) {
+                shuffleMetrics.incRemoteBytesReadToDisk(buf.size)
+              }
+              shuffleMetrics.incRemoteBlocksFetched(1)
             }
-            shuffleMetrics.incRemoteBlocksFetched(1)
-          }
-          if (!localBlocks.contains(blockId)) {
-            bytesInFlight -= size
-          }
-          if (isNetworkReqDone) {
-            reqsInFlight -= 1
-            logDebug("Number of requests in flight " + reqsInFlight)
-          }
+            if (!localBlocks.contains(blockId)) {
+              bytesInFlight -= size
+            }
+            if (isNetworkReqDone) {
+              reqsInFlight -= 1
+              logDebug("Number of requests in flight " + reqsInFlight)
+            }
 
-          val in = try {
-            buf.createInputStream()
-          } catch {
-            // The exception could only be throwed by local shuffle block
-            case e: IOException =>
-              assert(buf.isInstanceOf[FileSegmentManagedBuffer])
-              logError("Failed to create input stream from local block", e)
-              buf.release()
-              throwFetchFailedException(blockId, address, e)
-          }
-
-          input = streamWrapper(blockId, in)
-          // Only copy the stream if it's wrapped by compression or encryption, also the size of
-          // block is small (the decompressed block is smaller than maxBytesInFlight)
-          if (detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
-            val originalInput = input
-            val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
-            try {
-              // Decompress the whole block at once to detect any corruption, which could increase
-              // the memory usage tne potential increase the chance of OOM.
-              // TODO: manage the memory used here, and spill it into disk in case of OOM.
-              Utils.copyStream(input, out)
-              out.close()
-              input = out.toChunkedByteBuffer.toInputStream(dispose = true)
+            var in = try {
+              buf.createInputStream()
             } catch {
+              // The exception could only be throwed by local shuffle block
               case e: IOException =>
+                assert(buf.isInstanceOf[FileSegmentManagedBuffer] ||
+                  buf.isInstanceOf[DigestFileSegmentManagedBuffer])
+                logError("Failed to create input stream from local block", e)
                 buf.release()
-                if (buf.isInstanceOf[FileSegmentManagedBuffer]
-                  || corruptedBlocks.contains(blockId)) {
-                  throwFetchFailedException(blockId, address, e)
-                } else {
-                  logWarning(s"got an corrupted block $blockId from $address, fetch again", e)
-                  corruptedBlocks += blockId
-                  fetchRequests += FetchRequest(address, Array((blockId, size)))
-                  result = null
+                throwFetchFailedException(blockId, address, e)
+            }
+
+            // detect inputStream  corrupt
+            if (digestEnable) {
+              if (digest >= 0) {
+                val checkDigest = try {
+                  DigestUtils.getDigest(in)
+                } catch {
+                  case e: IOException =>
+                    logError("NESPARK-160: Error when checking digest", e)
+                    buf.release()
+                    throwFetchFailedException(blockId, address, e)
                 }
-            } finally {
-              // TODO: release the buf here to free memory earlier
-              originalInput.close()
-              in.close()
+
+                if (digest != checkDigest) {
+                  buf.release()
+                  val e = new CheckDigestFailedException(s"NESPARK-160: the checkDigest " +
+                    s"$checkDigest of $blockId is not equal with orgin $digest")
+                  if (corruptedBlocks.contains(blockId)) {
+                    // TODO: NESPARK-160 justMarkTaskFailed or throwFetchFailed
+                    throwFetchFailedException(blockId, address, e)
+                  } else {
+                    logError("The digest of read data is not correct and fetch again", e)
+                    corruptedBlocks += blockId
+                    fetchRequests += FetchRequest(address, Array((blockId, size)))
+                    result = null
+                    break()
+                  }
+                }
+                logDebug(s"NESPARK-160: the check is passed and origin digest is " +
+                s"$checkDigest")
+                // reset the inputStream, for the unSupported inputStream, recreate it
+                if (in.markSupported()) {
+                  in.reset()
+                } else {
+                  in = buf.createInputStream()
+                }
+              } else {
+                logDebug(s"NESPARK-160: the digest for address: ${address.host} and blockID:" +
+                  s"$blockId is null, local address is ${blockManager.blockManagerId.host}")
+              }
+            }
+
+            input = streamWrapper(blockId, in)
+            // If digestEnable is false, fallback to the origin detect corrupt policy
+            // Only copy the stream if it's wrapped by compression or encryption, also the size of
+            // block is small (the decompressed block is smaller than maxBytesInFlight)
+            if (!digestEnable && detectCorrupt && !input.eq(in) && size < maxBytesInFlight / 3) {
+              val originalInput = input
+              val out = new ChunkedByteBufferOutputStream(64 * 1024, ByteBuffer.allocate)
+              try {
+                // Decompress the whole block at once to detect any corruption, which could increase
+                // the memory usage tne potential increase the chance of OOM.
+                // TODO: manage the memory used here, and spill it into disk in case of OOM.
+                Utils.copyStream(input, out)
+                out.close()
+                input = out.toChunkedByteBuffer.toInputStream(dispose = true)
+              } catch {
+                case e: IOException =>
+                  buf.release()
+                  if (buf.isInstanceOf[FileSegmentManagedBuffer]
+                    || corruptedBlocks.contains(blockId)) {
+                    throwFetchFailedException(blockId, address, e)
+                  } else {
+                    logWarning(s"got an corrupted block $blockId from $address, fetch again", e)
+                    corruptedBlocks += blockId
+                    fetchRequests += FetchRequest(address, Array((blockId, size)))
+                    result = null
+                  }
+              } finally {
+                // TODO: release the buf here to free memory earlier
+                originalInput.close()
+                in.close()
+              }
             }
           }
 
@@ -596,13 +650,15 @@ object ShuffleBlockFetcherIterator {
    *             Size of remote block is used to calculate bytesInFlight.
    * @param buf `ManagedBuffer` for the content.
    * @param isNetworkReqDone Is this the last network request for this host in this fetch request.
+   * @param digest Is the digest of the result, default is -1L.
    */
   private[storage] case class SuccessFetchResult(
       blockId: BlockId,
       address: BlockManagerId,
       size: Long,
       buf: ManagedBuffer,
-      isNetworkReqDone: Boolean) extends FetchResult {
+      isNetworkReqDone: Boolean,
+      digest: Long = -1L) extends FetchResult {
     require(buf != null)
     require(size >= 0)
   }
@@ -618,4 +674,12 @@ object ShuffleBlockFetcherIterator {
       address: BlockManagerId,
       e: Throwable)
     extends FetchResult
+
+  /**
+   * An exception that the origin digest is not equal with the fetchResult's digest.
+   */
+  private[spark] case  class CheckDigestFailedException(
+      message: String,
+      cause: Throwable = null)
+    extends Exception(message, cause)
 }
