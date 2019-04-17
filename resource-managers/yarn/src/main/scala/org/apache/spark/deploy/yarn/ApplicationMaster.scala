@@ -109,6 +109,21 @@ private[spark] class ApplicationMaster(args: ApplicationMasterArguments) extends
       // are created by the periodic task).
       val newUser = UserGroupInformation.getCurrentUser()
       SparkHadoopUtil.get.transferCredentials(original, newUser)
+      val tempCreds = newUser.getCredentials
+      val credentialManager = new YARNHadoopDelegationTokenManager(
+        sparkConf,
+        yarnConf,
+        conf => YarnSparkHadoopUtil.hadoopFSsToAccess(sparkConf, conf))
+      newUser.doAs(new PrivilegedExceptionAction[Void] {
+        // Get a copy of the credentials
+        override def run(): Void = {
+          credentialManager.obtainDelegationTokens(
+            yarnConf,
+            tempCreds)
+          null
+        }
+      })
+      newUser.addCredentials(tempCreds)
       newUser
     } else {
       SparkHadoopUtil.get.createSparkUser()
