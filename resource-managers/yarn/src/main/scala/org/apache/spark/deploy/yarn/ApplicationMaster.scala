@@ -89,8 +89,21 @@ private[spark] class ApplicationMaster(args: ApplicationMasterArguments) extends
     val principal = sparkConf.get(PRINCIPAL).orNull
     val keytab = sparkConf.get(KEYTAB).orNull
     if (principal != null && keytab != null) {
-      val newUser = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab)
-
+      val loginUser = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab)
+      val tempCreds = loginUser.getCredentials
+      val credentialManager = new YARNHadoopDelegationTokenManager(
+        sparkConf,
+        yarnConf,
+        conf => YarnSparkHadoopUtil.hadoopFSsToAccess(sparkConf, conf))
+      loginUser.doAs(new PrivilegedExceptionAction[Void] {
+        // Get a copy of the credentials
+        override def run(): Void = {
+          credentialManager.obtainDelegationTokens(
+            yarnConf,
+            tempCreds)
+          null
+        }
+      })
       val renewer = new Thread() {
         override def run(): Unit = Utils.tryLogNonFatalError {
           while (true) {
@@ -107,21 +120,8 @@ private[spark] class ApplicationMaster(args: ApplicationMasterArguments) extends
       // YARN. It also copies over any delegation tokens that might have been created by the
       // client, which will then be transferred over when starting executors (until new ones
       // are created by the periodic task).
+      val newUser = UserGroupInformation.getCurrentUser()
       SparkHadoopUtil.get.transferCredentials(original, newUser)
-      val tempCreds = newUser.getCredentials
-      val credentialManager = new YARNHadoopDelegationTokenManager(
-        sparkConf,
-        yarnConf,
-        conf => YarnSparkHadoopUtil.hadoopFSsToAccess(sparkConf, conf))
-      newUser.doAs(new PrivilegedExceptionAction[Void] {
-        // Get a copy of the credentials
-        override def run(): Void = {
-          credentialManager.obtainDelegationTokens(
-            yarnConf,
-            tempCreds)
-          null
-        }
-      })
       newUser.addCredentials(tempCreds)
       newUser
     } else {
