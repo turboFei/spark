@@ -89,7 +89,7 @@ private[spark] class ApplicationMaster(args: ApplicationMasterArguments) extends
     val principal = sparkConf.get(PRINCIPAL).orNull
     val keytab = sparkConf.get(KEYTAB).orNull
     if (principal != null && keytab != null) {
-      UserGroupInformation.loginUserFromKeytab(principal, keytab)
+      val newUser = UserGroupInformation.loginUserFromKeytabAndReturnUGI(principal, keytab)
 
       val renewer = new Thread() {
         override def run(): Unit = Utils.tryLogNonFatalError {
@@ -107,7 +107,6 @@ private[spark] class ApplicationMaster(args: ApplicationMasterArguments) extends
       // YARN. It also copies over any delegation tokens that might have been created by the
       // client, which will then be transferred over when starting executors (until new ones
       // are created by the periodic task).
-      val newUser = UserGroupInformation.getCurrentUser()
       SparkHadoopUtil.get.transferCredentials(original, newUser)
       val tempCreds = newUser.getCredentials
       val credentialManager = new YARNHadoopDelegationTokenManager(
