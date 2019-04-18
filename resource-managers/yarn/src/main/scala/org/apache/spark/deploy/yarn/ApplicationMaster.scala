@@ -99,7 +99,7 @@ private[spark] class ApplicationMaster(args: ApplicationMasterArguments) extends
         // Get a copy of the credentials
         override def run(): Void = {
           credentialManager.obtainDelegationTokens(
-            yarnConf,
+            SparkHadoopUtil.get.getConfBypassingFSCache(yarnConf, "hdfs"),
             tempCreds)
           null
         }
