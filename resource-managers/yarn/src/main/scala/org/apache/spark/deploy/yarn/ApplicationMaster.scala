@@ -858,6 +858,7 @@ object ApplicationMaster extends Logging {
         val hadoopCreds = new Credentials()
         val credentialManager = new HadoopDelegationTokenManager(sparkConf, yarnConf, null)
         credentialManager.obtainDelegationTokens(hadoopCreds)
+        logInfo(s"wangfei The hadoopCred size: ${hadoopCreds.getAllTokens.size()}" )
         for (tok <- hadoopCreds.getAllTokens.toArray()) {
           val token = tok.asInstanceOf[Token[TokenIdentifier]]
           logInfo(s"wangfei: token ${token.toString}")
