@@ -21,16 +21,15 @@ import java.io.{File, IOException}
 import java.lang.reflect.{InvocationTargetException, Modifier}
 import java.net.{URI, URL}
 import java.security.PrivilegedExceptionAction
-import java.util.concurrent.{TimeoutException, TimeUnit}
+import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import scala.collection.mutable.HashMap
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
-
 import org.apache.commons.lang3.{StringUtils => ComStrUtils}
 import org.apache.hadoop.fs.{FileSystem, Path}
-import org.apache.hadoop.security.UserGroupInformation
+import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.util.StringUtils
 import org.apache.hadoop.yarn.api._
 import org.apache.hadoop.yarn.api.records._
@@ -38,10 +37,10 @@ import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationAttemptNotFoundException
 import org.apache.hadoop.yarn.server.webproxy.ProxyUriUtils
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
-
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.history.HistoryServer
+import org.apache.spark.deploy.security.HadoopDelegationTokenManager
 import org.apache.spark.deploy.yarn.config._
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
@@ -854,10 +853,16 @@ object ApplicationMaster extends Logging {
       case Some(principal) =>
         val originalCreds = UserGroupInformation.getCurrentUser().getCredentials()
         SparkHadoopUtil.get.loginUserFromKeytab(principal, sparkConf.get(KEYTAB).orNull)
+        val hadoopCreds = new Credentials()
+        val credentialManager = new HadoopDelegationTokenManager(sparkConf, yarnConf, null)
+        credentialManager.obtainDelegationTokens(hadoopCreds)
         val newUGI = UserGroupInformation.getCurrentUser()
         // Transfer the original user's tokens to the new user, since it may contain needed tokens
         // (such as those user to connect to YARN).
         newUGI.addCredentials(originalCreds)
+        // Set renewed hadoop delegation tokens to the new user, since they may be expired when
+        // the application master retries.
+        newUGI.addCredentials(hadoopCreds)
         newUGI
 
       case _ =>
