@@ -21,24 +21,24 @@ import java.io.{File, IOException}
 import java.lang.reflect.{InvocationTargetException, Modifier}
 import java.net.{URI, URL}
 import java.security.PrivilegedExceptionAction
-import java.util.concurrent.{TimeoutException, TimeUnit}
+import java.util.concurrent.{TimeUnit, TimeoutException}
 
 import scala.collection.mutable.HashMap
 import scala.concurrent.Promise
 import scala.concurrent.duration.Duration
 import scala.util.control.NonFatal
-
 import org.apache.commons.lang3.{StringUtils => ComStrUtils}
 import org.apache.hadoop.fs.{FileSystem, Path}
+import org.apache.hadoop.security.token.{Token, TokenIdentifier}
 import org.apache.hadoop.security.{Credentials, UserGroupInformation}
 import org.apache.hadoop.util.StringUtils
 import org.apache.hadoop.yarn.api._
 import org.apache.hadoop.yarn.api.records._
 import org.apache.hadoop.yarn.conf.YarnConfiguration
 import org.apache.hadoop.yarn.exceptions.ApplicationAttemptNotFoundException
+import org.apache.hadoop.yarn.security.AMRMTokenIdentifier
 import org.apache.hadoop.yarn.server.webproxy.ProxyUriUtils
 import org.apache.hadoop.yarn.util.{ConverterUtils, Records}
-
 import org.apache.spark._
 import org.apache.spark.deploy.SparkHadoopUtil
 import org.apache.spark.deploy.history.HistoryServer
@@ -858,6 +858,10 @@ object ApplicationMaster extends Logging {
         val hadoopCreds = new Credentials()
         val credentialManager = new HadoopDelegationTokenManager(sparkConf, yarnConf, null)
         credentialManager.obtainDelegationTokens(hadoopCreds)
+        for (tok <- hadoopCreds.getAllTokens.toArray()) {
+          val token = tok.asInstanceOf[Token[TokenIdentifier]]
+          logInfo(s"wangfei: token ${token.toString}")
+        }
         val newUGI = UserGroupInformation.getCurrentUser()
         // Transfer the original user's tokens to the new user, since it may contain needed tokens
         // (such as those user to connect to YARN).
