@@ -525,11 +525,4 @@ package object config {
       .checkValue(v => v > 0, "The threshold should be positive.")
       .createWithDefault(10000000)
 
-  private[spark] val SHUFFLE_DIGEST_ENABLE =
-    ConfigBuilder("spark.shuffle.digest.enable")
-      .internal()
-      .doc("The parameter to control whether check the transmitted data during shuffle.")
-      .booleanConf
-      .createWithDefault(false)
-
 }

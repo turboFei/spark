@@ -40,7 +40,6 @@ import org.iq80.leveldb.DBIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import org.apache.spark.network.buffer.DigestFileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.FileSegmentManagedBuffer;
 import org.apache.spark.network.buffer.ManagedBuffer;
 import org.apache.spark.network.shuffle.protocol.ExecutorShuffleInfo;
@@ -240,23 +239,12 @@ public class ExternalShuffleBlockResolver {
     try {
       ShuffleIndexInformation shuffleIndexInformation = shuffleIndexCache.get(indexFile);
       ShuffleIndexRecord shuffleIndexRecord = shuffleIndexInformation.getIndex(reduceId);
-      if (shuffleIndexInformation.isHasDigest()) {
-        return new DigestFileSegmentManagedBuffer(
-          conf,
-          getFile(executor.localDirs, executor.subDirsPerLocalDir,
+      return new FileSegmentManagedBuffer(
+        conf,
+        getFile(executor.localDirs, executor.subDirsPerLocalDir,
           "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
-          shuffleIndexRecord.getOffset(),
-          shuffleIndexRecord.getLength(),
-          shuffleIndexRecord.getDigest());
-
-      } else {
-        return new FileSegmentManagedBuffer(
-          conf,
-          getFile(executor.localDirs, executor.subDirsPerLocalDir,
-          "shuffle_" + shuffleId + "_" + mapId + "_0.data"),
-          shuffleIndexRecord.getOffset(),
-          shuffleIndexRecord.getLength());
-      }
+        shuffleIndexRecord.getOffset(),
+        shuffleIndexRecord.getLength());
     } catch (ExecutionException e) {
       throw new RuntimeException("Failed to open file: " + indexFile, e);
     }
