@@ -1,0 +1,104 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements. See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License. You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Spark provides this Travis CI configuration file to help contributors
+# check Scala/Java style conformance and JDK7/8 compilation easily
+# during their preparing pull requests.
+#   - Scalastyle is executed during `maven install` implicitly.
+#   - Java Checkstyle is executed by `lint-java`.
+# See the related discussion here.
+# https://github.com/apache/spark/pull/12980
+
+# 1. Choose OS (Ubuntu 14.04.3 LTS Server Edition 64bit, ~2 CORE, 7.5GB RAM)
+sudo: required
+dist: trusty
+
+# 2. Choose language and target JDKs for parallel builds.
+language: scala
+scala:
+  - 2.12.8
+
+# 3. Setup cache directory for SBT and Maven.
+cache:
+  directories:
+    - $HOME/.sbt
+    - $HOME/.m2
+    - $HOME/.ivy2
+
+# 4. Turn off notifications.
+notifications:
+  email:
+    on_success: always
+    on_failure: always
+
+before_install:
+  - unset SBT_OPTS JVM_OPTS
+
+# 5. Run maven install before running lint-java.
+install:
+  - build/sbt -Phadoop-2.7 -Pyarn -Pkafka-0-10 -Phive assembly/package test:package | grep -v  "^.*[info].*Resolving"
+
+# 6. Run tests
+
+jobs:
+  include:
+    - stage: core-java-scala-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "core/testOnly  test.org.apache.spark.* org.apache.sparktest.*"
+    - stage: core-a-m-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "core/testOnly   org.apache.spark.a*  org.apache.spark.b* org.apache.spark.c* org.apache.spark.d* org.apache.spark.e* org.apache.spark.f* org.apache.spark.g* org.apache.spark.h* org.apache.spark.i* org.apache.spark.j* org.apache.spark.k* org.apache.spark.l* org.apache.spark.m*"
+    - stage: core-n-z-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "core/testOnly   org.apache.spark.n*  org.apache.spark.o* org.apache.spark.p* org.apache.spark.q* org.apache.spark.r* org.apache.spark.s* org.apache.spark.t* org.apache.spark.u* org.apache.spark.v* org.apache.spark.w* org.apache.spark.x* org.apache.spark.y* org.apache.spark.z*"
+    - stage: core-A-Z-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "core/testOnly   org.apache.spark.A*  org.apache.spark.B* org.apache.spark.C* org.apache.spark.D* org.apache.spark.E* org.apache.spark.F* org.apache.spark.G* org.apache.spark.H* org.apache.spark.I* org.apache.spark.J* org.apache.spark.K* org.apache.spark.L* org.apache.spark.M* org.apache.spark.N*  org.apache.spark.O* org.apache.spark.P* org.apache.spark.Q* org.apache.spark.R* org.apache.spark.S* org.apache.spark.T* org.apache.spark.U* org.apache.spark.V* org.apache.spark.W* org.apache.spark.X* org.apache.spark.Y* org.apache.spark.Z*"
+    - stage: streaming
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 streaming/test
+    - stage: ml
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 mllib/test
+    - stage: graphx
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 graphx/test
+    - stage: network
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 network-common/test
+    - stage: shuffle
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 network-shuffle/test
+    - stage: unsafe
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 unsafe/test
+    - stage: yarn
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Pyarn yarn/test
+    - stage: repl
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 repl/test
+    - stage: launcher
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 launcher/test
+    - stage: catalyst
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 catalyst/test
+    - stage: sql-java-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "sql/testOnly test.*"
+    - stage: sql-a-m-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "sql/testOnly org.apache.spark.sql.a* org.apache.spark.sql.b* org.apache.spark.sql.c* org.apache.spark.sql.d* org.apache.spark.sql.e* org.apache.spark.sql.f* org.apache.spark.sql.g* org.apache.spark.sql.h* org.apache.spark.sql.i* org.apache.spark.sql.j* org.apache.spark.sql.k* org.apache.spark.sql.l* org.apache.spark.sql.m*"
+    - stage: sql-n-z-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "sql/testOnly org.apache.spark.sql.n* org.apache.spark.sql.o* org.apache.spark.sql.p* org.apache.spark.sql.q* org.apache.spark.sql.r* org.apache.spark.sql.s* org.apache.spark.sql.t* org.apache.spark.sql.u* org.apache.spark.sql.v* org.apache.spark.sql.w* org.apache.spark.sql.x* org.apache.spark.sql.y* org.apache.spark.sql.z*"
+    - stage: sql-A-Z-test
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 "sql/testOnly org.apache.spark.sql.A* org.apache.spark.sql.B* org.apache.spark.sql.C* org.apache.spark.sql.D* org.apache.spark.sql.E* org.apache.spark.sql.F* org.apache.spark.sql.G* org.apache.spark.sql.H* org.apache.spark.sql.I* org.apache.spark.sql.J* org.apache.spark.sql.K* org.apache.spark.sql.L* org.apache.spark.sql.M* org.apache.spark.sql.N* org.apache.spark.sql.O* org.apache.spark.sql.P* org.apache.spark.sql.Q* org.apache.spark.sql.R* org.apache.spark.sql.S* org.apache.spark.sql.T* org.apache.spark.sql.U* org.apache.spark.sql.V* org.apache.spark.sql.W* org.apache.spark.sql.X* org.apache.spark.sql.Y* org.apache.spark.sql.Z*"
+    - stage: hive
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest "hive/testOnly org.apache.spark.sql.hive.C* org.apache.spark.sql.hive.E* org.apache.spark.sql.hive.H* org.apache.spark.sql.hive.L* org.apache.spark.sql.hive.M* org.apache.spark.sql.hive.P* org.apache.spark.sql.hive.Q* org.apache.spark.sql.hive.H* org.apache.spark.sql.hive.p* org.apache.spark.sql.hive.S* org.apache.spark.sql.hive.I* org.apache.spark.sql.hive.U*"
+    - stage: hive-catalyst
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest "hive/testOnly org.apache.spark.sql.catalyst.*"
+    - stage: hive-client
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest "hive/testOnly org.apache.spark.sql.hive.client.*"
+    - stage: hive-orc
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest "hive/testOnly org.apache.spark.sql.hive.orc.*"
+    - stage: hive-execution
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest "hive/testOnly org.apache.spark.sql.hive.execution.*"
+    - stage: hive-sources
+      script: ./build/sbt -mem 4096 -Phadoop-2.7 -Phive -Dtest.exclude.tags=org.apache.spark.tags.ExtendedHiveTest "hive/testOnly org.apache.spark.sql.sources.*"
