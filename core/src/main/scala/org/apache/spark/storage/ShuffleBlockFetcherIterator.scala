@@ -242,8 +242,7 @@ final class ShuffleBlockFetcherIterator(
     val blockFetchingListener = new BlockFetchingListener {
 
       // for the shuffle fetching listener, only need to implement onBlockFetchSuccess with digest
-      override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer,
-          digest: Long): Unit = {
+      override def onBlockFetchSuccess(blockId: String, buf: ManagedBuffer, digest: Long): Unit = {
         // Only add the buffer to results queue if the iterator is not zombie,
         // i.e. cleanup() has not been called yet.
         ShuffleBlockFetcherIterator.this.synchronized {
@@ -477,7 +476,7 @@ final class ShuffleBlockFetcherIterator(
                 throwFetchFailedException(blockId, address, e)
             }
 
-            // detect inputStream  corrupt
+            // If shuffle digest enabled is true, check the block with checkSum.
             if (digestEnabled) {
               if (digest >= 0) {
                 val checkDigest = try {
@@ -521,7 +520,7 @@ final class ShuffleBlockFetcherIterator(
               // of the data. But even if 'detectCorruptUseExtraMemory' configuration is off, or if
               // the corruption is later, we'll still detect the corruption later in the stream.
               streamCompressedOrEncrypted = !input.eq(in)
-              if (streamCompressedOrEncrypted && detectCorruptUseExtraMemory) {
+              if (!digestEnabled && streamCompressedOrEncrypted && detectCorruptUseExtraMemory) {
                 // TODO: manage the memory used here, and spill it into disk in case of OOM.
                 input = Utils.copyStreamUpTo(input, maxBytesInFlight / 3)
               }

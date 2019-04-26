@@ -29,9 +29,6 @@ public class DigestUtils {
        return DIGEST_LENGTH;
     }
 
-    public DigestUtils() {
-    }
-
     public static long getDigest(InputStream data) throws IOException {
         return updateCRC32(getCRC32(), data);
     }
@@ -42,7 +39,7 @@ public class DigestUtils {
 
     public static long updateCRC32(CRC32 crc32, InputStream data) throws IOException {
         byte[] buffer = new byte[STREAM_BUFFER_LENGTH];
-        int len = 0;
+        int len;
         while ((len = data.read(buffer)) >= 0) {
             crc32.update(buffer, 0, len);
         }
