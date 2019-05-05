@@ -21,8 +21,9 @@ import java.nio.ByteBuffer
 import java.util.{HashMap => JHashMap, Map => JMap}
 
 import scala.collection.JavaConverters._
-import scala.concurrent.{Future, Promise}
+import scala.concurrent.{ExecutionContext, Future, Promise}
 import scala.reflect.ClassTag
+import scala.util.{Failure, Success, Try}
 
 import com.codahale.metrics.{Metric, MetricSet}
 
@@ -35,9 +36,11 @@ import org.apache.spark.network.server._
 import org.apache.spark.network.shuffle.{BlockFetchingListener, DownloadFileManager, OneForOneBlockFetcher, RetryingBlockFetcher}
 import org.apache.spark.network.shuffle.protocol.UploadBlock
 import org.apache.spark.network.util.JavaUtils
+import org.apache.spark.rpc.RpcEndpointRef
 import org.apache.spark.serializer.JavaSerializer
 import org.apache.spark.storage.{BlockId, StorageLevel}
-import org.apache.spark.util.Utils
+import org.apache.spark.storage.BlockManagerMessages.IsExecutorAlive
+import org.apache.spark.util.{ThreadUtils, Utils}
 
 /**
  * A BlockTransferService that uses Netty to fetch a set of blocks at time.
@@ -48,7 +51,8 @@ private[spark] class NettyBlockTransferService(
     bindAddress: String,
     override val hostName: String,
     _port: Int,
-    numCores: Int)
+    numCores: Int,
+    rpcEndpointRef: RpcEndpointRef = null)
   extends BlockTransferService {
 
   // TODO: Don't use Java serialization, use a more cross-version compatible serialization format.
@@ -60,6 +64,9 @@ private[spark] class NettyBlockTransferService(
   private[this] var server: TransportServer = _
   private[this] var clientFactory: TransportClientFactory = _
   private[this] var appId: String = _
+
+  private val askThreadPool = ThreadUtils.newDaemonCachedThreadPool("netty-block-ask-thread-pool")
+  private implicit val askExecutionContext = ExecutionContext.fromExecutorService(askThreadPool)
 
   override def init(blockDataManager: BlockDataManager): Unit = {
     val rpcHandler = new NettyBlockRpcServer(conf.getAppId, serializer, blockDataManager)
@@ -116,11 +123,26 @@ private[spark] class NettyBlockTransferService(
         }
       }
 
+      val executorActiveChecker = new RetryingBlockFetcher.ExecutorActiveChecker {
+        override def createAndStart(): Boolean = {
+          val isExecutorAliveMsg = IsExecutorAlive(execId)
+          Try {
+            rpcEndpointRef.askSync[Boolean](isExecutorAliveMsg)
+          } match {
+            case Success(value) =>
+              value
+            case Failure(exception) =>
+              true
+          }
+        }
+      }
+
       val maxRetries = transportConf.maxIORetries()
       if (maxRetries > 0) {
         // Note this Fetcher will correctly handle maxRetries == 0; we avoid it just in case there's
         // a bug in this code. We should remove the if statement once we're sure of the stability.
-        new RetryingBlockFetcher(transportConf, blockFetchStarter, blockIds, listener).start()
+        new RetryingBlockFetcher(transportConf, blockFetchStarter, blockIds, listener,
+          executorActiveChecker).start()
       } else {
         blockFetchStarter.createAndStart(blockIds, listener)
       }

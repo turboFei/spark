@@ -104,6 +104,9 @@ class BlockManagerMasterEndpoint(
     case GetBlockStatus(blockId, askSlaves) =>
       context.reply(blockStatus(blockId, askSlaves))
 
+    case IsExecutorAlive(executorId) =>
+      context.reply(isExecutorAlive(executorId))
+
     case GetMatchingBlockIds(filter, askSlaves) =>
       context.reply(getMatchingBlockIds(filter, askSlaves))
 
@@ -322,6 +325,10 @@ class BlockManagerMasterEndpoint(
         }
       (info.blockManagerId, blockStatusFuture)
     }.toMap
+  }
+
+  private def isExecutorAlive(executorId: String): Boolean = {
+    blockManagerIdByExecutor.contains(executorId)
   }
 
   /**

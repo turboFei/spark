@@ -61,6 +61,17 @@ public class RetryingBlockFetcher {
          throws IOException, InterruptedException;
   }
 
+  /**
+   * Used to check whether the executor which maintain the block data to fetch is active.
+   */
+  public interface ExecutorActiveChecker {
+    /**
+     * This method only be used in the case where the block data is maintained by executor.
+     * So here is a default implement.
+     */
+    boolean createAndStart();
+  }
+
   /** Shared executor service used for waiting and retrying. */
   private static final ExecutorService executorService = Executors.newCachedThreadPool(
     NettyUtils.createThreadFactory("Block Fetch Retry"));
@@ -69,6 +80,8 @@ public class RetryingBlockFetcher {
 
   /** Used to initiate new Block Fetches on our remaining blocks. */
   private final BlockFetchStarter fetchStarter;
+
+  private final ExecutorActiveChecker executorActiveChecker;
 
   /** Parent listener which we delegate all successful or permanently failed block fetches to. */
   private final BlockFetchingListener listener;
@@ -104,6 +117,15 @@ public class RetryingBlockFetcher {
       BlockFetchStarter fetchStarter,
       String[] blockIds,
       BlockFetchingListener listener) {
+    this(conf, fetchStarter, blockIds, listener, null);
+  }
+
+  public RetryingBlockFetcher(
+      TransportConf conf,
+      BlockFetchStarter fetchStarter,
+      String[] blockIds,
+      BlockFetchingListener listener,
+      ExecutorActiveChecker executorActiveChecker) {
     this.fetchStarter = fetchStarter;
     this.listener = listener;
     this.maxRetries = conf.maxIORetries();
@@ -111,6 +133,7 @@ public class RetryingBlockFetcher {
     this.outstandingBlocksIds = Sets.newLinkedHashSet();
     Collections.addAll(outstandingBlocksIds, blockIds);
     this.currentListener = new RetryingBlockFetchListener();
+    this.executorActiveChecker = executorActiveChecker;
   }
 
   /**
@@ -178,7 +201,11 @@ public class RetryingBlockFetcher {
     boolean isIOException = e instanceof IOException
       || (e.getCause() != null && e.getCause() instanceof IOException);
     boolean hasRemainingRetries = retryCount < maxRetries;
-    return isIOException && hasRemainingRetries;
+    boolean isExecutorAlive = true;
+    if (executorActiveChecker != null) {
+      isExecutorAlive = executorActiveChecker.createAndStart();
+    }
+    return isExecutorAlive && isIOException && hasRemainingRetries;
   }
 
   /**
