@@ -130,8 +130,10 @@ private[spark] class NettyBlockTransferService(
             rpcEndpointRef.askSync[Boolean](isExecutorAliveMsg)
           } match {
             case Success(value) =>
+              logInfo("wangfei: Check success.")
               value
             case Failure(exception) =>
+              logInfo("wangfei: There is an exception.")
               true
           }
         }

@@ -165,7 +165,7 @@ public class RetryingBlockFetcher {
         long start = System.currentTimeMillis();
         boolean alive = executorActiveChecker.createAndStart();
         long duration = System.currentTimeMillis() - start;
-        logger.info(String.format("wangfei: The executor is alive?: %s and duration is:", alive, duration));
+        logger.info(String.format("wangfei: The executor is alive?: %s and duration is: %d", alive, duration));
       }
       fetchStarter.createAndStart(blockIdsToFetch, myListener);
     } catch (Exception e) {
