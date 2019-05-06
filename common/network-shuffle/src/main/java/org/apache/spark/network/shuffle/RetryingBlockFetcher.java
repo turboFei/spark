@@ -161,6 +161,12 @@ public class RetryingBlockFetcher {
 
     // Now initiate the fetch on all outstanding blocks, possibly initiating a retry if that fails.
     try {
+      if (executorActiveChecker != null) {
+        long start = System.currentTimeMillis();
+        boolean alive = executorActiveChecker.createAndStart();
+        long duration = System.currentTimeMillis() - start;
+        logger.info(String.format("wangfei: The executor is alive?: %s and duration is:", alive, duration));
+      }
       fetchStarter.createAndStart(blockIdsToFetch, myListener);
     } catch (Exception e) {
       logger.error(String.format("Exception while beginning fetch of %s outstanding blocks %s",
