@@ -56,6 +56,12 @@ case class ShuffleBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends Blo
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId
 }
 
+case class ShuffleBlockSegmentId(shuffleId: Int, mapId: Int, reduceId: Int, segmentId: Int)
+  extends BlockId {
+  override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + "_" +
+    segmentId
+}
+
 @DeveloperApi
 case class ShuffleDataBlockId(shuffleId: Int, mapId: Int, reduceId: Int) extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + ".data"
@@ -104,6 +110,7 @@ class UnrecognizedBlockId(name: String)
 object BlockId {
   val RDD = "rdd_([0-9]+)_([0-9]+)".r
   val SHUFFLE = "shuffle_([0-9]+)_([0-9]+)_([0-9]+)".r
+  val SHUFFLE_SEGMENT = "shuffle_([0-9]+)_([0-9]+)_([0-9]+)_([0-9]+)".r
   val SHUFFLE_DATA = "shuffle_([0-9]+)_([0-9]+)_([0-9]+).data".r
   val SHUFFLE_INDEX = "shuffle_([0-9]+)_([0-9]+)_([0-9]+).index".r
   val BROADCAST = "broadcast_([0-9]+)([_A-Za-z0-9]*)".r
@@ -118,6 +125,8 @@ object BlockId {
       RDDBlockId(rddId.toInt, splitIndex.toInt)
     case SHUFFLE(shuffleId, mapId, reduceId) =>
       ShuffleBlockId(shuffleId.toInt, mapId.toInt, reduceId.toInt)
+    case SHUFFLE_SEGMENT(shuffleId, mapId, reduceId, segmentId) =>
+      ShuffleBlockSegmentId(shuffleId.toInt, mapId.toInt, reduceId.toInt, segmentId.toInt)
     case SHUFFLE_DATA(shuffleId, mapId, reduceId) =>
       ShuffleDataBlockId(shuffleId.toInt, mapId.toInt, reduceId.toInt)
     case SHUFFLE_INDEX(shuffleId, mapId, reduceId) =>
