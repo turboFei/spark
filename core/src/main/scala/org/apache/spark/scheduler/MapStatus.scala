@@ -49,7 +49,7 @@ private[spark] sealed trait MapStatus {
    * If a partition's size is large than [[MapStatus.SHUFFLE_FETCH_THRESHOLD]],
    * it should be fetched more than one time.
    */
-  def getBlockSegments(reduceId: Int): Int
+  def getBlockSegments(reduceId: Int): Short
 }
 
 private[spark] object MapStatus {
@@ -64,7 +64,8 @@ private[spark] object MapStatus {
 
   private[spark] val SHUFFLE_FETCH_THRESHOLD = Int.MaxValue
 
-  private[spark] lazy val SHUFFLE_FETCH_SPLIT = SparkEnv.get.conf.getBoolean()
+  private[spark] val SHUFFLE_FETCH_SPLIT = SparkEnv.get.conf.getBoolean(
+    config.SHUFFLE_FETCH_SPLIT_ENABLED.key, false)
 
   private[this] val LOG_BASE = 1.1
 
@@ -106,16 +107,16 @@ private[spark] object MapStatus {
 private[spark] class CompressedMapStatus(
     private[this] var loc: BlockManagerId,
     private[this] var compressedSizes: Array[Byte],
-    private[this] var patitionSegments: Map[Int, Byte])
+    private[this] var patitionSegments: Map[Int, Short])
   extends MapStatus with Externalizable {
 
   protected def this() = this(null, null.asInstanceOf[Array[Byte]],
-    null.asInstanceOf[Map[Int, Byte]])  // For deserialization only
+    null.asInstanceOf[Map[Int, Short]])  // For deserialization only
 
   def this(loc: BlockManagerId, uncompressedSizes: Array[Long]) {
     this(loc, uncompressedSizes.map(MapStatus.compressSize),
       uncompressedSizes.zipWithIndex.filter(_._1 > MapStatus.SHUFFLE_FETCH_THRESHOLD)
-        .map( kv => (kv._2, math.ceil(kv._1.toDouble / MapStatus.SHUFFLE_FETCH_THRESHOLD).toByte))
+        .map( kv => (kv._2, math.ceil(kv._1.toDouble / MapStatus.SHUFFLE_FETCH_THRESHOLD).toShort))
         .toMap)
   }
 
@@ -125,7 +126,7 @@ private[spark] class CompressedMapStatus(
     MapStatus.decompressSize(compressedSizes(reduceId))
   }
 
-  override def getBlockSegments(reduceId: Int): Int = {
+  override def getBlockSegments(reduceId: Int): Short = {
     patitionSegments.getOrElse(reduceId, 1)
   }
 
@@ -136,7 +137,7 @@ private[spark] class CompressedMapStatus(
     out.writeInt(patitionSegments.size)
     patitionSegments.foreach { kv =>
       out.writeInt(kv._1)
-      out.writeByte(kv._2)
+      out.writeShort(kv._2)
     }
   }
 
@@ -146,10 +147,10 @@ private[spark] class CompressedMapStatus(
     compressedSizes = new Array[Byte](len)
     in.readFully(compressedSizes)
     val count = in.readInt()
-    val patitionSegmentsArray = mutable.ArrayBuffer[Tuple2[Int, Byte]]()
+    val patitionSegmentsArray = mutable.ArrayBuffer[Tuple2[Int, Short]]()
     (0 until count).foreach { _ =>
       val block = in.readInt()
-      val fetchTimes = in.readByte()
+      val fetchTimes = in.readShort()
       patitionSegmentsArray += Tuple2(block, fetchTimes)
     }
     patitionSegments = patitionSegmentsArray.toMap
@@ -173,7 +174,7 @@ private[spark] class HighlyCompressedMapStatus private (
     private[this] var emptyBlocks: RoaringBitmap,
     private[this] var avgSize: Long,
     private var hugeBlockSizes: Map[Int, Byte],
-    private var partitionSegments: Map[Int, Byte])
+    private var partitionSegments: Map[Int, Short])
   extends MapStatus with Externalizable {
 
   // loc could be null when the default constructor is called during deserialization
@@ -197,7 +198,7 @@ private[spark] class HighlyCompressedMapStatus private (
     }
   }
 
-  override def getBlockSegments(reduceId: Int): Int = {
+  override def getBlockSegments(reduceId: Int): Short = {
     partitionSegments.getOrElse(reduceId, 1)
   }
 
@@ -213,7 +214,7 @@ private[spark] class HighlyCompressedMapStatus private (
     out.writeInt(partitionSegments.size)
     partitionSegments.foreach { kv =>
       out.writeInt(kv._1)
-      out.writeByte(kv._2)
+      out.writeShort(kv._2)
     }
   }
 
@@ -230,11 +231,11 @@ private[spark] class HighlyCompressedMapStatus private (
       hugeBlockSizesArray += Tuple2(block, size)
     }
     hugeBlockSizes = hugeBlockSizesArray.toMap
-    val fetchTimesCount = in.readInt()
-    val partitionSegmentsArray = mutable.ArrayBuffer[Tuple2[Int, Byte]]()
-    (0 until fetchTimesCount).foreach { _ =>
+    val partitionSegmentsCount = in.readInt()
+    val partitionSegmentsArray = mutable.ArrayBuffer[Tuple2[Int, Short]]()
+    (0 until partitionSegmentsCount).foreach { _ =>
       val block = in.readInt()
-      val fetchTimes = in.readByte()
+      val fetchTimes = in.readShort()
       partitionSegmentsArray += Tuple2(block, fetchTimes)
     }
     partitionSegments = partitionSegmentsArray.toMap
@@ -258,14 +259,14 @@ private[spark] object HighlyCompressedMapStatus {
       .map(_.conf.get(config.SHUFFLE_ACCURATE_BLOCK_THRESHOLD))
       .getOrElse(config.SHUFFLE_ACCURATE_BLOCK_THRESHOLD.defaultValue.get)
     val hugeBlockSizesArray = ArrayBuffer[Tuple2[Int, Byte]]()
-    val partitionSegmentsArray = ArrayBuffer[Tuple2[Int, Byte]]()
+    val partitionSegmentsArray = ArrayBuffer[Tuple2[Int, Short]]()
     while (i < totalNumBlocks) {
       val size = uncompressedSizes(i)
       if (size > 0) {
         numNonEmptyBlocks += 1
         if (size > MapStatus.SHUFFLE_FETCH_THRESHOLD) {
           partitionSegmentsArray +=
-            Tuple2(i, math.ceil(size.toDouble / MapStatus.SHUFFLE_FETCH_THRESHOLD).toByte)
+            Tuple2(i, math.ceil(size.toDouble / MapStatus.SHUFFLE_FETCH_THRESHOLD).toShort)
         }
         // Huge blocks are not included in the calculation for average size, thus size for smaller
         // blocks is more accurate.
