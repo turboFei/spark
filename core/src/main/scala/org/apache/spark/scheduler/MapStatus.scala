@@ -182,7 +182,7 @@ private[spark] class HighlyCompressedMapStatus private (
     partitionSegments.size >0,
     "Average size can only be zero for map stages that produced no output")
 
-  protected def this() = this(null, -1, null, -1, null)  // For deserialization only
+  protected def this() = this(null, -1, null, -1, null, null)  // For deserialization only
 
   override def location: BlockManagerId = loc
 
