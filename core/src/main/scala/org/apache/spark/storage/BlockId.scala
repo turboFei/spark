@@ -39,6 +39,7 @@ sealed abstract class BlockId {
   def asRDDId: Option[RDDBlockId] = if (isRDD) Some(asInstanceOf[RDDBlockId]) else None
   def isRDD: Boolean = isInstanceOf[RDDBlockId]
   def isShuffle: Boolean = isInstanceOf[ShuffleBlockId]
+  def isShuffleSegment: Boolean = isInstanceOf[ShuffleBlockSegmentId]
   def isBroadcast: Boolean = isInstanceOf[BroadcastBlockId]
 
   override def toString: String = name
@@ -60,6 +61,8 @@ case class ShuffleBlockSegmentId(shuffleId: Int, mapId: Int, reduceId: Int, segm
   extends BlockId {
   override def name: String = "shuffle_" + shuffleId + "_" + mapId + "_" + reduceId + "_" +
     segmentId
+
+  def getShuffleBlockId: ShuffleBlockId = ShuffleBlockId(shuffleId, mapId, reduceId)
 }
 
 @DeveloperApi
