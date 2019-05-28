@@ -64,6 +64,8 @@ private[spark] object MapStatus {
 
   private[spark] val SHUFFLE_FETCH_THRESHOLD = Int.MaxValue
 
+  private[spark] lazy val SHUFFLE_FETCH_SPLIT = SparkEnv.get.conf.getBoolean()
+
   private[this] val LOG_BASE = 1.1
 
   /**
