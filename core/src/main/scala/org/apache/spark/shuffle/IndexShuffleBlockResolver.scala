@@ -250,12 +250,12 @@ private[spark] class IndexShuffleBlockResolver(
           s"expected $expectedPosition but actual position was $actualPosition.")
       }
       val segmentOffset = offset + segmentId * SHUFFLE_FETCH_THRESHOLD
-      val nextSegmentOffset = math.min(nextOffset - segmentOffset, SHUFFLE_FETCH_THRESHOLD)
+      val length = math.min(nextOffset - segmentOffset, SHUFFLE_FETCH_THRESHOLD)
       new FileSegmentManagedBuffer(
         transportConf,
         getDataFile(blockId.shuffleId, blockId.mapId),
         segmentOffset,
-        nextSegmentOffset)
+        length)
     } finally {
       in.close()
     }
