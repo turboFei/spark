@@ -19,9 +19,7 @@ package org.apache.spark.storage
 
 import java.io.{InputStream, IOException, SequenceInputStream}
 import java.nio.ByteBuffer
-import java.util.TreeMap
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue, PriorityBlockingQueue}
 import java.util.concurrent.atomic.AtomicInteger
 import javax.annotation.concurrent.GuardedBy
 
@@ -240,9 +238,18 @@ final class ShuffleBlockFetcherIterator(
     val address = req.address
 
     val blockFetchingListener = new BlockFetchingListener {
+      case class SegmentManagedBuffer(
+          segmentId: Int,
+          buf: ManagedBuffer) extends Comparable[SegmentManagedBuffer] {
+        override def compareTo(o: SegmentManagedBuffer): Int = {
+          segmentId - o.segmentId
+        }
+      }
+
       lazy val partitionSegments =
         req.blocks.map(kv => (kv._1.toString, new AtomicInteger(kv._2._2))).toMap
-      val blockIdResults = new ConcurrentHashMap[String, TreeMap[Int, ManagedBuffer]]()
+      val blockIdSegmentBuffers =
+        new ConcurrentHashMap[String, PriorityBlockingQueue[SegmentManagedBuffer]]()
 
       private def onBlockSegmentFetchSuccess(blockId: String, buf: ManagedBuffer): Unit = {
         ShuffleBlockFetcherIterator.this.synchronized {
@@ -253,13 +260,15 @@ final class ShuffleBlockFetcherIterator(
             remainingBlocks -= blockId
             val shuffleBlockSegmentId = BlockId(blockId).asInstanceOf[ShuffleBlockSegmentId]
             val shuffleBlockId = shuffleBlockSegmentId.getShuffleBlockId.toString
-            val blockIdResult = blockIdResults.getOrDefault(shuffleBlockId, new TreeMap())
-            blockIdResult.put(shuffleBlockSegmentId.segmentId, buf)
+            val segmentBufs = blockIdSegmentBuffers.getOrDefault(shuffleBlockId,
+              new PriorityBlockingQueue[SegmentManagedBuffer]())
+            segmentBufs.offer(SegmentManagedBuffer(shuffleBlockSegmentId.segmentId, buf))
             if (partitionSegments.get(blockId).get.decrementAndGet() == 0) {
+              val bufs = for (i <- (0 until segmentBufs.size())) yield segmentBufs.poll().buf
               results.put(new SuccessFetchResult(BlockId(shuffleBlockId), address,
-                sizeMap(shuffleBlockId.toString), blockIdResult.asScala.map(_._2).toSeq,
-                remainingBlocks.isEmpty, segmentsMap(shuffleBlockId.toString)))
-              blockIdResults.remove(shuffleBlockId)
+                sizeMap(shuffleBlockId.toString), bufs, remainingBlocks.isEmpty,
+                segmentsMap(shuffleBlockId.toString)))
+              blockIdSegmentBuffers.remove(shuffleBlockId)
               logTrace("Got remote block " + shuffleBlockId + " after " +
                 Utils.getUsedTimeMs(startTime))
             }
@@ -290,7 +299,7 @@ final class ShuffleBlockFetcherIterator(
 
       private def onBlockSegmentFetchFailure(blockId: String, e: Throwable): Unit = {
         val shuffleBlockId = BlockId(blockId).asInstanceOf[ShuffleBlockSegmentId].getShuffleBlockId
-        blockIdResults.remove(shuffleBlockId.toString)
+        blockIdSegmentBuffers.remove(shuffleBlockId.toString)
         logError(s"Failed to get block(s) from ${req.address.host}:${req.address.port}", e)
         results.put(new FailureFetchResult(shuffleBlockId, address, e))
       }
