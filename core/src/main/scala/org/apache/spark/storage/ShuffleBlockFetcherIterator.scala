@@ -269,6 +269,12 @@ final class ShuffleBlockFetcherIterator(
                 sizeMap(shuffleBlockId.toString), bufs, remainingBlocks.isEmpty,
                 segmentsMap(shuffleBlockId.toString)))
               blockIdSegmentBuffers.remove(shuffleBlockId)
+
+              if (segmentsMap(shuffleBlockId.toString) > 1) {
+                logInfo(s"**wangfei**: This is a shuffle block: ${shuffleBlockId.toString} with " +
+                  s"${segmentsMap(shuffleBlockId.toString)} segments")
+              }
+
               logTrace("Got remote block " + shuffleBlockId + " after " +
                 Utils.getUsedTimeMs(startTime))
             }
