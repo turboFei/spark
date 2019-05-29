@@ -265,7 +265,11 @@ final class ShuffleBlockFetcherIterator(
               new PriorityBlockingQueue[SegmentManagedBuffer]())
             segmentBufs.offer(SegmentManagedBuffer(shuffleBlockSegmentId.segmentId, buf))
             if (partitionSegments.get(shuffleBlockId).get.decrementAndGet() == 0) {
-              val bufs = for (i <- (0 until segmentBufs.size())) yield segmentBufs.poll().buf
+              val segBufs = for (i <- (0 until segmentBufs.size())) yield segmentBufs.poll()
+              val segIds = segBufs.map(_.segmentId)
+              val bufs = segBufs.map(_.buf)
+              assert(bufs.size == segmentsMap(shuffleBlockId))
+              assert(Arrays.equals(segIds.toArray, (0 until buf.size.toInt).toArray))
               results.put(new SuccessFetchResult(BlockId(shuffleBlockId), address,
                 sizeMap(shuffleBlockId.toString), bufs, remainingBlocks.isEmpty,
                 segmentsMap(shuffleBlockId.toString)))
@@ -274,10 +278,6 @@ final class ShuffleBlockFetcherIterator(
               if (segmentsMap(shuffleBlockId.toString) > 1) {
                 logInfo(s"**wangfei**: This is a shuffle block: ${shuffleBlockId.toString} with " +
                   s"${segmentsMap(shuffleBlockId.toString)} segments")
-                assert(segmentBufs.size == segmentsMap(shuffleBlockId))
-                val segmentIds =
-                  for ( i <- (0 until segmentBufs.size())) yield segmentBufs.poll().segmentId
-                assert(Arrays.equals(segmentIds.toArray, (0 until segmentBufs.size()).toArray))
               }
 
               logTrace("Got remote block " + shuffleBlockId + " after " +
