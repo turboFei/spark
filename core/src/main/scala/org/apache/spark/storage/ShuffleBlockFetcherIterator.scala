@@ -264,15 +264,13 @@ final class ShuffleBlockFetcherIterator(
             val segmentBufs = blockIdSegmentBuffers.getOrDefault(shuffleBlockId,
               new PriorityBlockingQueue[SegmentManagedBuffer]())
             segmentBufs.offer(SegmentManagedBuffer(shuffleBlockSegmentId.segmentId, buf))
+            blockIdSegmentBuffers.put(shuffleBlockId, segmentBufs)
             if (partitionSegments.get(shuffleBlockId).get.decrementAndGet() == 0) {
-              val segBufs = for (i <- (0 until segmentBufs.size())) yield segmentBufs.poll()
-              val segIds = segBufs.map(_.segmentId)
-              val bufs = segBufs.map(_.buf)
+              val bufs = for (i <- (0 until segmentBufs.size())) yield segmentBufs.poll().buf
               assert(bufs.size == segmentsMap(shuffleBlockId))
-              assert(Arrays.equals(segIds.toArray, (0 until buf.size.toInt).toArray))
               results.put(new SuccessFetchResult(BlockId(shuffleBlockId), address,
-                sizeMap(shuffleBlockId.toString), bufs, remainingBlocks.isEmpty,
-                segmentsMap(shuffleBlockId.toString)))
+                sizeMap(shuffleBlockId), bufs, remainingBlocks.isEmpty,
+                segmentsMap(shuffleBlockId)))
               blockIdSegmentBuffers.remove(shuffleBlockId)
 
               if (segmentsMap(shuffleBlockId.toString) > 1) {
