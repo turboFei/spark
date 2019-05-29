@@ -47,7 +47,8 @@ private[spark] sealed trait MapStatus {
 
   /**
    * If a partition's size is large than [[MapStatus.SHUFFLE_FETCH_THRESHOLD]],
-   * it should be fetched more than one time.
+   * it should be fetched more than one time, this method return how many segments
+   * this partition should be split to fetch.
    */
   def getBlockSegments(reduceId: Int): Short
 }
@@ -150,8 +151,8 @@ private[spark] class CompressedMapStatus(
     val patitionSegmentsArray = mutable.ArrayBuffer[Tuple2[Int, Short]]()
     (0 until count).foreach { _ =>
       val block = in.readInt()
-      val fetchTimes = in.readShort()
-      patitionSegmentsArray += Tuple2(block, fetchTimes)
+      val segments = in.readShort()
+      patitionSegmentsArray += Tuple2(block, segments)
     }
     patitionSegments = patitionSegmentsArray.toMap
   }
@@ -235,8 +236,8 @@ private[spark] class HighlyCompressedMapStatus private (
     val partitionSegmentsArray = mutable.ArrayBuffer[Tuple2[Int, Short]]()
     (0 until partitionSegmentsCount).foreach { _ =>
       val block = in.readInt()
-      val fetchTimes = in.readShort()
-      partitionSegmentsArray += Tuple2(block, fetchTimes)
+      val segments = in.readShort()
+      partitionSegmentsArray += Tuple2(block, segments)
     }
     partitionSegments = partitionSegmentsArray.toMap
   }
