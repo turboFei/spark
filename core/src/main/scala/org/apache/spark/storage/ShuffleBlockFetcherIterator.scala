@@ -263,7 +263,7 @@ final class ShuffleBlockFetcherIterator(
             val segmentBufs = blockIdSegmentBuffers.getOrDefault(shuffleBlockId,
               new PriorityBlockingQueue[SegmentManagedBuffer]())
             segmentBufs.offer(SegmentManagedBuffer(shuffleBlockSegmentId.segmentId, buf))
-            if (partitionSegments.get(blockId).get.decrementAndGet() == 0) {
+            if (partitionSegments.get(shuffleBlockId).get.decrementAndGet() == 0) {
               val bufs = for (i <- (0 until segmentBufs.size())) yield segmentBufs.poll().buf
               results.put(new SuccessFetchResult(BlockId(shuffleBlockId), address,
                 sizeMap(shuffleBlockId.toString), bufs, remainingBlocks.isEmpty,
@@ -300,7 +300,6 @@ final class ShuffleBlockFetcherIterator(
           }
           logTrace("Got remote block " + blockId + " after " + Utils.getUsedTimeMs(startTime))
         }
-
       }
 
       private def onBlockSegmentFetchFailure(blockId: String, e: Throwable): Unit = {
