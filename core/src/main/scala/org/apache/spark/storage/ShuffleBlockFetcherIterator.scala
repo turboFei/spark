@@ -19,6 +19,7 @@ package org.apache.spark.storage
 
 import java.io.{InputStream, IOException, SequenceInputStream}
 import java.nio.ByteBuffer
+import java.util.Arrays
 import java.util.concurrent.{ConcurrentHashMap, LinkedBlockingQueue, PriorityBlockingQueue}
 import java.util.concurrent.atomic.AtomicInteger
 import javax.annotation.concurrent.GuardedBy
@@ -273,6 +274,10 @@ final class ShuffleBlockFetcherIterator(
               if (segmentsMap(shuffleBlockId.toString) > 1) {
                 logInfo(s"**wangfei**: This is a shuffle block: ${shuffleBlockId.toString} with " +
                   s"${segmentsMap(shuffleBlockId.toString)} segments")
+                assert(segmentBufs.size == segmentsMap(shuffleBlockId))
+                val segmentIds =
+                  for ( i <- (0 until segmentBufs.size())) yield segmentBufs.poll().segmentId
+                assert(Arrays.equals(segmentIds.toArray, (0 until segmentBufs.size()).toArray))
               }
 
               logTrace("Got remote block " + shuffleBlockId + " after " +
