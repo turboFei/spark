@@ -96,9 +96,9 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
 
     val transfer = createMockTransfer(remoteBlocks)
 
-    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (localBmId, localBlocks.keys.map(blockId => (blockId, 1.asInstanceOf[Long])).toSeq),
-      (remoteBmId, remoteBlocks.keys.map(blockId => (blockId, 1.asInstanceOf[Long])).toSeq)
+    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (localBmId, localBlocks.keys.map(blockId => (blockId, ((1.asInstanceOf[Long]), 1))).toSeq),
+      (remoteBmId, remoteBlocks.keys.map(blockId => (blockId, (1.asInstanceOf[Long], 1))).toSeq)
     )
 
     val iterator = new ShuffleBlockFetcherIterator(
@@ -175,8 +175,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       }
     })
 
-    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (remoteBmId, blocks.keys.map(blockId => (blockId, 1.asInstanceOf[Long])).toSeq))
+    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (remoteBmId, blocks.keys.map(blockId => (blockId, (1.asInstanceOf[Long], 1))).toSeq))
 
     val taskContext = TaskContext.empty()
     val iterator = new ShuffleBlockFetcherIterator(
@@ -243,8 +243,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       }
     })
 
-    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (remoteBmId, blocks.keys.map(blockId => (blockId, 1.asInstanceOf[Long])).toSeq))
+    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (remoteBmId, blocks.keys.map(blockId => (blockId, (1.asInstanceOf[Long], 1))).toSeq))
 
     val taskContext = TaskContext.empty()
     val iterator = new ShuffleBlockFetcherIterator(
@@ -309,8 +309,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       }
     })
 
-    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (remoteBmId, blocks.keys.map(blockId => (blockId, 1.asInstanceOf[Long])).toSeq))
+    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (remoteBmId, blocks.keys.map(blockId => (blockId, (1.asInstanceOf[Long], 1))).toSeq))
 
     val taskContext = TaskContext.empty()
     val iterator = new ShuffleBlockFetcherIterator(
@@ -375,9 +375,9 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
     val transfer = createMockTransfer(
       Map(ShuffleBlockId(0, 0, 0) -> corruptBuffer, ShuffleBlockId(0, 1, 0) -> corruptBuffer))
 
-    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (localBmId, localBlockLengths),
-      (remoteBmId, remoteBlockLengths)
+    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (localBmId, localBlockLengths.map(kv => (kv._1, (kv._2, 1)))),
+      (remoteBmId, remoteBlockLengths.map(kv => (kv._1, (kv._2, 1))))
     )
 
     val taskContext = TaskContext.empty()
@@ -436,8 +436,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       }
     })
 
-    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (remoteBmId, blocks.keys.map(blockId => (blockId, 1.asInstanceOf[Long])).toSeq))
+    val blocksByAddress = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (remoteBmId, blocks.keys.map(blockId => (blockId, (1.asInstanceOf[Long], 1))).toSeq))
 
     val taskContext = TaskContext.empty()
     val iterator = new ShuffleBlockFetcherIterator(
@@ -495,7 +495,9 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
         }
       })
 
-    def fetchShuffleBlock(blocksByAddress: Seq[(BlockManagerId, Seq[(BlockId, Long)])]): Unit = {
+    def fetchShuffleBlock(
+        blocksByAddress: Seq[(BlockManagerId,
+        Seq[(BlockId, (Long, Int))])]): Unit = {
       // Set `maxBytesInFlight` and `maxReqsInFlight` to `Int.MaxValue`, so that during the
       // construction of `ShuffleBlockFetcherIterator`, all requests to fetch remote shuffle blocks
       // are issued. The `maxReqSizeShuffleToMem` is hard-coded as 200 here.
@@ -512,15 +514,15 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
         detectCorrupt = true)
     }
 
-    val blocksByAddress1 = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (remoteBmId, remoteBlocks.keys.map(blockId => (blockId, 100L)).toSeq))
+    val blocksByAddress1 = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (remoteBmId, remoteBlocks.keys.map(blockId => (blockId, (100L, 1))).toSeq))
     fetchShuffleBlock(blocksByAddress1)
     // `maxReqSizeShuffleToMem` is 200, which is greater than the block size 100, so don't fetch
     // shuffle block to disk.
     assert(tempFileManager == null)
 
-    val blocksByAddress2 = Seq[(BlockManagerId, Seq[(BlockId, Long)])](
-      (remoteBmId, remoteBlocks.keys.map(blockId => (blockId, 300L)).toSeq))
+    val blocksByAddress2 = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
+      (remoteBmId, remoteBlocks.keys.map(blockId => (blockId, (300L, 1))).toSeq))
     fetchShuffleBlock(blocksByAddress2)
     // `maxReqSizeShuffleToMem` is 200, which is smaller than the block size 300, so fetch
     // shuffle block to disk.
