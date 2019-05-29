@@ -37,7 +37,6 @@ import com.google.common.cache.Weigher;
 import com.google.common.collect.Maps;
 import org.iq80.leveldb.DB;
 import org.iq80.leveldb.DBIterator;
-import org.omg.PortableInterceptor.INACTIVE;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -180,6 +179,10 @@ public class ExternalShuffleBlockResolver {
     return getSortBasedShuffleBlockData(executor, shuffleId, mapId, reduceId);
   }
 
+  /**
+   * Obtains a FileSegmentManagedBuffer from (shuffleId, mapId, reduceId, segmentId). We make
+   * assumptions about how the hash and sort based shuffles store their data.
+   */
   public ManagedBuffer getBlockSegmentData(
       String appId,
       String execId,
@@ -271,6 +274,11 @@ public class ExternalShuffleBlockResolver {
     }
   }
 
+  /**
+   * Sort-based shuffle segment data uses an index called "shuffle_ShuffleId_MapId_0.index" and segmentId
+   * into a data file called "shuffle_ShuffleId_MapId_0.data". This logic is from IndexShuffleBlockResolver,
+   * and the block id format is from ShuffleDataBlockId and ShuffleIndexBlockId.
+   */
   private ManagedBuffer getSortBasedShuffleBlockSegmentData(
     ExecutorShuffleInfo executor, int shuffleId, int mapId, int reduceId, int segmentId) {
     File indexFile = getFile(executor.localDirs, executor.subDirsPerLocalDir,
