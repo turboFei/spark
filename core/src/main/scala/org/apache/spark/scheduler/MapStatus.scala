@@ -63,7 +63,10 @@ private[spark] object MapStatus {
     }
   }
 
-  private[spark] val SHUFFLE_FETCH_THRESHOLD = Int.MaxValue
+//  private[spark] val SHUFFLE_FETCH_THRESHOLD = Int.MaxValue
+
+  private[spark] val SHUFFLE_FETCH_THRESHOLD = SparkEnv.get.conf.getSizeAsBytes(
+    "spark.shuffle.fetch.threshold", Int.MaxValue)
 
   private[spark] val SHUFFLE_FETCH_SPLIT = SparkEnv.get.conf.getBoolean(
     config.SHUFFLE_FETCH_SPLIT_ENABLED.key, false)
