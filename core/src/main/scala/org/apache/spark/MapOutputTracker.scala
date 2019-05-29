@@ -634,7 +634,7 @@ private[spark] class MapOutputTrackerMaster(
 
   // This method is only called in local-mode.
   def getMapSizesByExecutorId(shuffleId: Int, startPartition: Int, endPartition: Int)
-      : Seq[(BlockManagerId, Seq[(BlockId, Long, Int)])] = {
+      : Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])] = {
     logDebug(s"Fetching outputs for shuffle $shuffleId, partitions $startPartition-$endPartition")
     shuffleStatuses.get(shuffleId) match {
       case Some (shuffleStatus) =>
@@ -670,7 +670,7 @@ private[spark] class MapOutputTrackerWorker(conf: SparkConf) extends MapOutputTr
   private val fetching = new HashSet[Int]
 
   override def getMapSizesByExecutorId(shuffleId: Int, startPartition: Int, endPartition: Int)
-      : Seq[(BlockManagerId, Seq[(BlockId, Long, Int)])] = {
+      : Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])] = {
     logDebug(s"Fetching outputs for shuffle $shuffleId, partitions $startPartition-$endPartition")
     val statuses = getStatuses(shuffleId)
     try {
@@ -857,9 +857,9 @@ private[spark] object MapOutputTracker extends Logging {
       shuffleId: Int,
       startPartition: Int,
       endPartition: Int,
-      statuses: Array[MapStatus]): Seq[(BlockManagerId, Seq[(BlockId, Long, Int)])] = {
+      statuses: Array[MapStatus]): Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])] = {
     assert (statuses != null)
-    val splitsByAddress = new HashMap[BlockManagerId, ArrayBuffer[(BlockId, Long, Int)]]
+    val splitsByAddress = new HashMap[BlockManagerId, ArrayBuffer[(BlockId, (Long, Int))]]
     for ((status, mapId) <- statuses.zipWithIndex) {
       if (status == null) {
         val errorMessage = s"Missing an output location for shuffle $shuffleId"
@@ -868,12 +868,11 @@ private[spark] object MapOutputTracker extends Logging {
       } else {
         for (part <- startPartition until endPartition) {
           splitsByAddress.getOrElseUpdate(status.location, ArrayBuffer()) +=
-            ((ShuffleBlockId(shuffleId, mapId, part), status.getSizeForBlock(part),
-            status.getBlockSegments(part)))
+            ((ShuffleBlockId(shuffleId, mapId, part), (status.getSizeForBlock(part),
+            status.getBlockSegments(part))))
         }
       }
     }
-
     splitsByAddress.toSeq
   }
 }
