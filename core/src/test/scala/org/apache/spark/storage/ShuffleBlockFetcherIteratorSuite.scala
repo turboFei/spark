@@ -111,7 +111,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       Int.MaxValue,
       Int.MaxValue,
       Int.MaxValue,
-      true)
+      true,
+      false)
 
     // 3 local blocks fetched in initialization
     verify(blockManager, times(3)).getBlockData(any())
@@ -189,7 +190,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       Int.MaxValue,
       Int.MaxValue,
       Int.MaxValue,
-      true)
+      true,
+      false)
 
     verify(blocks(ShuffleBlockId(0, 0, 0)), times(0)).release()
     iterator.next()._2.close() // close() first block's input stream
@@ -257,7 +259,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       Int.MaxValue,
       Int.MaxValue,
       Int.MaxValue,
-      true)
+      true,
+      false)
 
     // Continue only after the mock calls onBlockFetchFailure
     sem.acquire()
@@ -323,7 +326,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       Int.MaxValue,
       Int.MaxValue,
       Int.MaxValue,
-      true)
+      true,
+      false)
 
     // Continue only after the mock calls onBlockFetchFailure
     sem.acquire()
@@ -391,7 +395,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       Int.MaxValue,
       Int.MaxValue,
       Int.MaxValue,
-      true)
+      true,
+      false)
     // Blocks should be returned without exceptions.
     assert(Set(iterator.next()._1, iterator.next()._1) ===
         Set(ShuffleBlockId(0, 0, 0), ShuffleBlockId(0, 1, 0)))
@@ -450,6 +455,7 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
       Int.MaxValue,
       Int.MaxValue,
       Int.MaxValue,
+      false,
       false)
 
     // Continue only after the mock calls onBlockFetchFailure
@@ -511,7 +517,8 @@ class ShuffleBlockFetcherIteratorSuite extends SparkFunSuite with PrivateMethodT
         maxReqsInFlight = Int.MaxValue,
         maxBlocksInFlightPerAddress = Int.MaxValue,
         maxReqSizeShuffleToMem = 200,
-        detectCorrupt = true)
+        detectCorrupt = true,
+        false)
     }
 
     val blocksByAddress1 = Seq[(BlockManagerId, Seq[(BlockId, (Long, Int))])](
