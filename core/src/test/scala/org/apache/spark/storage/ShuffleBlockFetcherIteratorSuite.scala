@@ -17,7 +17,7 @@
 
 package org.apache.spark.storage
 
-import java.io.{File, InputStream, IOException}
+import java.io.{File, InputStream, IOException, SequenceInputStream}
 import java.util.UUID
 import java.util.concurrent.Semaphore
 

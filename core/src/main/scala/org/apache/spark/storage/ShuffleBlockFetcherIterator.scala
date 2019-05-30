@@ -161,7 +161,7 @@ final class ShuffleBlockFetcherIterator(
   private[storage] def releaseCurrentResultBuffer(): Unit = {
     // Release the current buffer if necessary
     if (currentResult != null) {
-      currentResult.bufs.foreach(_.release())
+      currentResult.sequenceBufs.release()
     }
     currentResult = null
   }
@@ -196,14 +196,15 @@ final class ShuffleBlockFetcherIterator(
     while (iter.hasNext) {
       val result = iter.next()
       result match {
-        case SuccessFetchResult(_, address, _, bufs, _, _) =>
+        case SuccessFetchResult(_, address, _, seqBufs, _, _) =>
           if (address != blockManager.blockManagerId) {
+            val bufs = seqBufs.bufs
             shuffleMetrics.incRemoteBytesRead(bufs.map(_.size()).sum)
             bufs.filter(_.isInstanceOf[FileSegmentManagedBuffer])
               .foreach(buf => shuffleMetrics.incRemoteBytesReadToDisk(buf.size))
             shuffleMetrics.incRemoteBlocksFetched(1)
           }
-          bufs.foreach(_.release())
+          seqBufs.release()
         case _ =>
       }
     }
@@ -268,7 +269,7 @@ final class ShuffleBlockFetcherIterator(
               val bufs = for (i <- (0 until segmentBufs.size())) yield segmentBufs.poll().buf
               assert(bufs.size == segmentsMap(shuffleBlockId))
               results.put(new SuccessFetchResult(BlockId(shuffleBlockId), address,
-                sizeMap(shuffleBlockId), bufs, remainingBlocks.isEmpty,
+                sizeMap(shuffleBlockId), SequenceManagedBuffer(bufs), remainingBlocks.isEmpty,
                 segmentsMap(shuffleBlockId)))
               blockIdSegmentBuffers.remove(shuffleBlockId)
               logTrace("Got remote block " + shuffleBlockId + " after " +
@@ -290,7 +291,7 @@ final class ShuffleBlockFetcherIterator(
               buf.retain()
               remainingBlocks -= blockId
               results.put(new SuccessFetchResult(BlockId(blockId), address, sizeMap(blockId),
-                Seq(buf), remainingBlocks.isEmpty))
+                SequenceManagedBuffer(Seq(buf)), remainingBlocks.isEmpty))
               logDebug("remainingBlocks: " + remainingBlocks)
             }
           }
@@ -398,7 +399,7 @@ final class ShuffleBlockFetcherIterator(
         shuffleMetrics.incLocalBytesRead(buf.size)
         buf.retain()
         results.put(new SuccessFetchResult(blockId, blockManager.blockManagerId,
-          buf.size(), Seq(buf), false))
+          buf.size(), SequenceManagedBuffer(Seq(buf)), false))
       } catch {
         case e: Exception =>
           // If we see an exception, stop immediately.
@@ -462,11 +463,11 @@ final class ShuffleBlockFetcherIterator(
       shuffleMetrics.incFetchWaitTime(stopFetchWait - startFetchWait)
 
       result match {
-        case r @ SuccessFetchResult(blockId, address, size, bufs, isNetworkReqDone, segments) =>
+        case r @ SuccessFetchResult(blockId, address, size, seqBufs, isNetworkReqDone, segments) =>
           if (address != blockManager.blockManagerId) {
             numBlocksInFlightPerAddress(address) = numBlocksInFlightPerAddress(address) - 1
-            shuffleMetrics.incRemoteBytesRead(bufs.map(_.size()).sum)
-            bufs.filter(_.isInstanceOf[FileSegmentManagedBuffer])
+            shuffleMetrics.incRemoteBytesRead(seqBufs.bufs.map(_.size()).sum)
+            seqBufs.bufs.filter(_.isInstanceOf[FileSegmentManagedBuffer])
               .foreach(buf => shuffleMetrics.incRemoteBytesReadToDisk(buf.size()))
             shuffleMetrics.incRemoteBlocksFetched(1)
           }
@@ -479,13 +480,13 @@ final class ShuffleBlockFetcherIterator(
           }
 
           val in = try {
-            new SequenceInputStream(bufs.toIterator.map(_.createInputStream()).asJavaEnumeration)
+            seqBufs.createInputStream()
           } catch {
             // The exception could only be throwed by local shuffle block
             case e: IOException =>
-              assert(bufs.forall(_.isInstanceOf[FileSegmentManagedBuffer]))
+              assert(seqBufs.bufs.forall(_.isInstanceOf[FileSegmentManagedBuffer]))
               logError("Failed to create input stream from local block", e)
-              bufs.foreach(_.release())
+              seqBufs.release()
               throwFetchFailedException(blockId, address, e)
           }
 
@@ -504,8 +505,8 @@ final class ShuffleBlockFetcherIterator(
               input = out.toChunkedByteBuffer.toInputStream(dispose = true)
             } catch {
               case e: IOException =>
-                bufs.foreach(_.release())
-                if (bufs.forall(_.isInstanceOf[FileSegmentManagedBuffer])
+                seqBufs.release()
+                if (seqBufs.bufs.forall(_.isInstanceOf[FileSegmentManagedBuffer])
                   || corruptedBlocks.contains(blockId)) {
                   throwFetchFailedException(blockId, address, e)
                 } else {
@@ -660,17 +661,17 @@ object ShuffleBlockFetcherIterator {
    * @param address BlockManager that the block was fetched from.
    * @param size estimated size of the block. Note that this is NOT the exact bytes.
    *             Size of remote block is used to calculate bytesInFlight.
-   * @param bufs a sequence of `ManagedBuffer` for the content.
+   * @param sequenceBufs a sequence of `ManagedBuffer` for the content.
    * @param isNetworkReqDone Is this the last network request for this host in this fetch request.
    */
   private[storage] case class SuccessFetchResult(
       blockId: BlockId,
       address: BlockManagerId,
       size: Long,
-      bufs: Seq[ManagedBuffer],
+      sequenceBufs: SequenceManagedBuffer,
       isNetworkReqDone: Boolean,
       segments: Int = 1) extends FetchResult {
-    require(bufs != null && bufs.size != 0 && !bufs.exists(_ == null))
+    require(sequenceBufs != null && sequenceBufs.bufs != null)
     require(size >= 0)
   }
 
@@ -685,4 +686,25 @@ object ShuffleBlockFetcherIterator {
       address: BlockManagerId,
       e: Throwable)
     extends FetchResult
+
+  /**
+   * A sequence of managed buffer.
+   * @param bufs managed buffers.
+   */
+  private[storage] case class SequenceManagedBuffer(bufs: Seq[ManagedBuffer]) {
+    assert(bufs.size > 0)
+    def createInputStream(): InputStream = {
+      if (bufs.size == 1) {
+        bufs.apply(0).createInputStream()
+      } else {
+        // We should check the first input stream here, for that sequence inputStream will catch
+        // the IOException thrown by the first input stream.
+        val firstInputStream = bufs.apply(0).createInputStream()
+        firstInputStream.close()
+        new SequenceInputStream(bufs.iterator.map(_.createInputStream()).asJavaEnumeration)
+      }
+    }
+
+    def release(): Unit = bufs.foreach(_.release())
+  }
 }
