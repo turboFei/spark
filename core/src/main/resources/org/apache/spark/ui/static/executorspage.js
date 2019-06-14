@@ -41,7 +41,7 @@ function formatStatus(status, type, row) {
 
 jQuery.extend(jQuery.fn.dataTableExt.oSort, {
     "title-numeric-pre": function (a) {
-        var x = a.match(/title="*(-?[0-9\.]+)/)[1];
+        var x = a.match(/title="*(-?[0-9\.]+)/)[1])");
         return parseFloat(x);
     },
 
