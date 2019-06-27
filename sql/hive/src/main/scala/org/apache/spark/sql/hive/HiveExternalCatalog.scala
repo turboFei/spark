@@ -203,7 +203,24 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
         case he: HiveException if he.getCause != null && he.getCause.isInstanceOf[MetaException] =>
           StringUtils.contains(he.getCause.asInstanceOf[MetaException].getMessage,
             "AccessControlException")
-        case _ => false
+        case e: Exception =>
+          if (e.isInstanceOf[HiveException]) {
+            logInfo(s"This Exception is a HiveException, and the cause is null:" +
+              s" ${e.getCause == null}")
+            if (e.getCause != null) {
+              val cause = e.getCause
+              if (cause.isInstanceOf[MetaException]) {
+                logInfo(s"The cause of this HiveException is a MetaException.")
+              } else {
+                val causeType = cause.getClass.getName
+                logInfo(s"This exception is not a MetaException, but a $causeType")
+              }
+            }
+          } else {
+            val classType = e.getClass.getName
+            logInfo(s"This exception is not a HiveException, but a $classType")
+          }
+          false
       }
     }
 
@@ -212,12 +229,14 @@ private[spark] class HiveExternalCatalog(conf: SparkConf, hadoopConf: Configurat
         databaseExists(db)
       } catch {
         case ae: AnalysisException if isACLException(ae) => true
+        case e: Exception =>
+          logWarning(s"Exception occurred when checking whether database is existed.", e)
+          throw e
       }
     } else {
       databaseExists(db)
     }
   }
-
 
   override def listDatabases(): Seq[String] = withClient {
     client.listDatabases("*")
