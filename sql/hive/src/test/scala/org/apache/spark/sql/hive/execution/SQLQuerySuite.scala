@@ -2308,4 +2308,14 @@ class SQLQuerySuite extends QueryTest with SQLTestUtils with TestHiveSingleton {
     }
   }
 
+  test("SPARK-28194: Prevent None.get in EnsureRequirements") {
+    withTable("ta") {
+      withTable("tb") {
+        sql("CREATE TABLE ta(ac1 STRING, ac2 BIGINT, ac3 STRING)")
+        sql("CREATE TABLE tb(bc1 STRING, bc2 STRING, bc3 TIMESTAMP)")
+        sql("SELECT * FROM (SELECT DISTINCT ac1, ac2, ac3 FROM ta) a JOIN tb b " +
+          "ON a.ac1=b.bc1 and a.ac2=b.bc2 and a.ac1=TO_DATE(b.bc3)")
+      }
+    }
+  }
 }
