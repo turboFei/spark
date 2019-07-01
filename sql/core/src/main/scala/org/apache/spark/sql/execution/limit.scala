@@ -38,7 +38,11 @@ case class CollectLimitExec(limit: Int, child: SparkPlan) extends UnaryExecNode 
   override def executeCollect(): Array[InternalRow] = child.executeTake(limit)
   private val serializer: Serializer = new UnsafeRowSerializer(child.output.size)
   protected override def doExecute(): RDD[InternalRow] = {
-    val locallyLimited = child.execute().mapPartitionsInternal(_.take(limit))
+    val locallyLimited = if (limit <= 0) {
+      sparkContext.emptyRDD[InternalRow]
+    } else {
+      child.execute().mapPartitionsInternal(_.take(limit))
+    }
     val shuffled = new ShuffledRowRDD(
       ShuffleExchangeExec.prepareShuffleDependency(
         locallyLimited, child.output, SinglePartition, serializer))
@@ -54,8 +58,14 @@ trait BaseLimitExec extends UnaryExecNode with CodegenSupport {
   val limit: Int
   override def output: Seq[Attribute] = child.output
 
-  protected override def doExecute(): RDD[InternalRow] = child.execute().mapPartitions { iter =>
-    iter.take(limit)
+  protected override def doExecute(): RDD[InternalRow] = {
+    if (limit <= 0) {
+      sparkContext.emptyRDD[InternalRow]
+    } else {
+      child.execute().mapPartitions { iter =>
+        iter.take(limit)
+      }
+    }
   }
 
   override def inputRDDs(): Seq[RDD[InternalRow]] = {
