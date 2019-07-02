@@ -256,9 +256,7 @@ case class EnsureRequirements(conf: SQLConf) extends Rule[SparkPlan] {
             leftKeys.forall(x => leftExpressions.exists(_.semanticEquals(x))) =>
           if (!leftKeys.forall(x => leftKeys.filter(_.semanticEquals(x)).size ==
             leftExpressions.filter(_.semanticEquals(x)).size)) {
-            logInfo(s"wangfeiDebug, flag1")
-            // scalastyle:off
-            println(s"wangfeiDebug, flag1")
+            throw new Exception("flag1")
           }
           reorder(leftKeys, rightKeys, leftExpressions, leftKeys)
 
@@ -268,8 +266,7 @@ case class EnsureRequirements(conf: SQLConf) extends Rule[SparkPlan] {
               rightKeys.forall(x => rightExpressions.exists(_.semanticEquals(x))) =>
             if (!rightKeys.forall(x => rightKeys.filter(_.semanticEquals(x)).size ==
               rightExpressions.filter(_.semanticEquals(x)).size)) {
-              logInfo(s"wangfeiDebug, flag2")
-              println(s"wangfeiDebug, flag2")
+              throw new Exception("flag2")
             }
             reorder(leftKeys, rightKeys, rightExpressions, rightKeys)
 
