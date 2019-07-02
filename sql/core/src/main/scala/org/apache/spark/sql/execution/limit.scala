@@ -59,8 +59,14 @@ trait BaseLimitExec extends UnaryExecNode with CodegenSupport {
   val limit: Int
   override def output: Seq[Attribute] = child.output
 
-  protected override def doExecute(): RDD[InternalRow] = child.execute().mapPartitions { iter =>
-    iter.take(limit)
+  protected override def doExecute(): RDD[InternalRow] = {
+    if (limit <= 0) {
+      sqlContext.sparkContext.emptyRDD[InternalRow]
+    } else {
+      child.execute().mapPartitions { iter =>
+        iter.take(limit)
+      }
+    }
   }
 
   override def inputRDDs(): Seq[RDD[InternalRow]] = {
