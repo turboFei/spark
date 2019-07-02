@@ -142,7 +142,11 @@ case class TakeOrderedAndProjectExec(
 
   override def executeCollect(): Array[InternalRow] = {
     val ord = new LazilyGeneratedOrdering(sortOrder, child.output)
-    val data = child.execute().map(_.copy()).takeOrdered(limit)(ord)
+    val data = if (limit <= 0) {
+      Array.empty[InternalRow]
+    } else {
+      child.execute().map(_.copy()).takeOrdered(limit)(ord)
+    }
     if (projectList != child.output) {
       val proj = UnsafeProjection.create(projectList, child.output)
       data.map(r => proj(r).copy())
@@ -155,7 +159,9 @@ case class TakeOrderedAndProjectExec(
 
   protected override def doExecute(): RDD[InternalRow] = {
     val ord = new LazilyGeneratedOrdering(sortOrder, child.output)
-    val localTopK: RDD[InternalRow] = {
+    val localTopK: RDD[InternalRow] = if (limit <= 0) {
+      sparkContext.emptyRDD[InternalRow]
+    } else {
       child.execute().map(_.copy()).mapPartitions { iter =>
         org.apache.spark.util.collection.Utils.takeOrdered(iter, limit)(ord)
       }
