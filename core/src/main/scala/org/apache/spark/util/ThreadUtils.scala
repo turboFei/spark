@@ -202,7 +202,15 @@ private[spark] object ThreadUtils {
     } catch {
       // TimeoutException is thrown in the current thread, so not need to warp the exception.
       case NonFatal(t) if !t.isInstanceOf[TimeoutException] =>
-        throw new SparkException("Exception thrown in awaitResult: ", t)
+        if (t.getCause.isInstanceOf[ClassCastException]) {
+          val message = "ClassCastException occurred. You can try to set the Spark configuration" +
+            " setting spark.sql.hive.convertMetastoreParquet to true to work around this " +
+            "problem, however this may cause the column values all null, so you should check " +
+            "the query result after setting that."
+          throw new SparkException(message, t)
+        } else {
+          throw new SparkException("Exception thrown in awaitResult: ", t)
+        }
     }
   }
   // scalastyle:on awaitresult
