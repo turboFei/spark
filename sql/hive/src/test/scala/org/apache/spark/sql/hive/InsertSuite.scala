@@ -802,6 +802,16 @@ class InsertSuite extends QueryTest with TestHiveSingleton with BeforeAndAfter
     }
   }
 
+  test("SPARK-28194: test none.get") {
+    withTable("nga") {
+      withTable("ngb") {
+        spark.sql("create table if not exists nga(ac1 string, ac2 bigint, ac3 string)").show()
+        spark.sql("create table if not exists ngb(bc1 string, bc2 string, bc3 timestamp)").show()
+        spark.sql("explain select * from(select distinct ac1, ac2, ac3 from nga) a join " +
+          "ngb b on a.ac1=b.bc1 and a.ac2=b.bc2 and a.ac1=TO_DATE(b.bc3)").show()
+      }
+    }
+  }
 
   Seq("LOCAL", "").foreach { local =>
     Seq(true, false).foreach { caseSensitivity =>
