@@ -55,7 +55,8 @@ class HadoopMapReduceCommitProtocol(
     jobId: String,
     path: String,
     dynamicPartitionOverwrite: Boolean = false,
-    isPartitionOverwrite: Boolean = false,
+    isInsertIntoHadoopFsRelation: Boolean = false,
+    isOverwrite: Boolean = false,
     staticPartitionKVs: Seq[(String, String)] = Seq.empty[(String, String)])
   extends FileCommitProtocol with Serializable with Logging {
 
@@ -98,11 +99,13 @@ class HadoopMapReduceCommitProtocol(
 
   /**
    * Get the desired output path for the job. The output will be [[path]] when it is not a
-   * partitionOverwrite operation. Otherwise, it will be [[stagingDir]].
+   * InsertIntoHadoopFsRelation operation. Otherwise, it will be a sub dir under [[stagingDir]].
    */
   protected def getOutputPath(context: TaskAttemptContext): Path = {
-    if (isPartitionOverwrite) {
-      val outputPath = stagingDir.getFileSystem(context.getConfiguration).makeQualified(stagingDir)
+    if (isInsertIntoHadoopFsRelation) {
+      val appId = SparkEnv.get.conf.getAppId
+      val outputPath = new Path(stagingDir, appId + File.separator + getPrefixStaticPartitionPath())
+      stagingDir.getFileSystem(context.getConfiguration).makeQualified(outputPath)
       outputPath
     } else {
       new Path(path)
@@ -112,16 +115,17 @@ class HadoopMapReduceCommitProtocol(
   @transient private var outputPath: Path = _
 
   /**
-   * Get the determinable base path of results according to specified partition key-value pairs.
+   * Get a path with `sp_` prefix according to specified partition key-value pairs.
+   * This path is used to detect the partition which is being written.
    */
-  private def getStaticPartitionPath(): String = {
+  private def getPrefixStaticPartitionPath(): String = {
     staticPartitionKVs.map{kv =>
-      escapePathName(kv._1) + "=" + escapePathName(kv._2)
+      "sp_" + escapePathName(kv._1) + "=" + escapePathName(kv._2)
     }.mkString(File.separator)
   }
 
   protected def setupCommitter(context: TaskAttemptContext): OutputCommitter = {
-    if (isPartitionOverwrite) {
+    if (isInsertIntoHadoopFsRelation) {
       outputPath = getOutputPath(context)
       context.getConfiguration.set(FileOutputFormat.OUTDIR, outputPath.toString)
     }
@@ -234,24 +238,8 @@ class HadoopMapReduceCommitProtocol(
           }
           fs.rename(new Path(stagingDir, part), finalPartPath)
         }
-      } else if (isPartitionOverwrite) {
+      } else if (isInsertIntoHadoopFsRelation) {
         mergePaths(fs, fs.getFileStatus(outputPath), new Path(path))
-//        if (!getStaticPartitionPath().isEmpty) {
-//          val finalPartPath = new Path(path, getStaticPartitionPath)
-//          if (fs.exists(new Path(stagingDir, getStaticPartitionPath()))) {
-//            assert(!fs.exists(finalPartPath))
-//            fs.rename(new Path(stagingDir, getStaticPartitionPath), finalPartPath)
-//          }
-//        } else {
-//          val parts = fs.listStatus(stagingDir)
-//            .map(_.getPath.getName)
-//            .filter(name => !name.startsWith(".") && name.contains("="))
-//          for (part <- parts) {
-//            val finalPartPath = new Path(path, part)
-//            assert(!fs.exists(finalPartPath))
-//            fs.rename(new Path(stagingDir, part), finalPartPath)
-//          }
-//        }
       }
 
       fs.delete(stagingDir, true)
