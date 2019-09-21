@@ -17,19 +17,20 @@
 
 package org.apache.spark.internal.io
 
-import java.io.{File, IOException}
+import java.io.{File, FileNotFoundException, IOException}
 import java.util.{Date, UUID}
 
 import scala.collection.mutable
 import scala.util.Try
 
 import org.apache.hadoop.conf.Configurable
-import org.apache.hadoop.fs.Path
+import org.apache.hadoop.fs.{FileStatus, FileSystem, Path}
 import org.apache.hadoop.mapreduce._
 import org.apache.hadoop.mapreduce.lib.output.{FileOutputCommitter, FileOutputFormat}
 import org.apache.hadoop.mapreduce.task.TaskAttemptContextImpl
 import org.apache.hadoop.util.Shell
 
+import org.apache.spark.SparkEnv
 import org.apache.spark.internal.Logging
 import org.apache.spark.mapred.SparkHadoopMapRedUtil
 
@@ -320,7 +321,7 @@ class HadoopMapReduceCommitProtocol(
   }
 }
 
-object  HadoopMapReduceCommitProtocol {
+object  HadoopMapReduceCommitProtocol extends Logging {
   // Copied from ExternalCatalogUtils in catalyst module and used to escape path name.
 
   private val charToEscape = {
@@ -362,5 +363,68 @@ object  HadoopMapReduceCommitProtocol {
     }
 
     builder.toString()
+  }
+
+  val algorithmVersion = SparkEnv.get.conf
+    .get("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "1")
+
+  @throws[IOException]
+  private def mergePaths(fs: FileSystem, from: FileStatus, to: Path): Unit = {
+    logDebug(s"Merging data from $from to $to ")
+    var toStat: FileStatus = null
+    try {
+      toStat = fs.getFileStatus(to)
+    } catch {
+      case _: FileNotFoundException =>
+        toStat = null
+    }
+    if (from.isFile) {
+      if (toStat != null && !fs.delete(to, true)) {
+        throw new IOException("Failed to delete " + to)
+      }
+
+      if (!fs.rename(from.getPath, to)) {
+        throw new IOException("Failed to rename " + from + " to " + to)
+      }
+    } else if (from.isDirectory) {
+      if (toStat != null) {
+        if (!toStat.isDirectory()) {
+          if (!fs.delete(to, true)) {
+            throw new IOException("Failed to delete " + to)
+          }
+
+          renameOrMerge(fs, from, to);
+        } else {
+          var var5 = fs.listStatus(from.getPath());
+          var var6 = var5.length;
+
+          for (var7 <- 0 until var6) {
+            val subFrom = var5(var7)
+            val subTo = new Path(to, subFrom.getPath().getName())
+            mergePaths(fs, subFrom, subTo)
+          }
+        }
+      } else {
+        renameOrMerge(fs, from, to);
+      }
+    }
+  }
+
+  @throws[IOException]
+  private def renameOrMerge(fs: FileSystem, from: FileStatus, to: Path): Unit = {
+    if (algorithmVersion == 1) {
+      if (!fs.rename(from.getPath, to)) {
+        throw new IOException("Failed to rename " + from + " to " + to)
+      }
+    } else {
+      fs.mkdirs(to)
+      val var4 = fs.listStatus(from.getPath)
+      val var5 = var4.length
+      for (var6 <- 0 until var5) {
+        val subFrom = var4(var6)
+        val subTo = new Path(to, subFrom.getPath.getName)
+        mergePaths(fs, subFrom, subTo)
+      }
+    }
   }
 }
