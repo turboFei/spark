@@ -109,6 +109,8 @@ class HadoopMapReduceCommitProtocol(
     }
   }
 
+  @transient private var outputPath: Path = _
+
   /**
    * Get the determinable base path of results according to specified partition key-value pairs.
    */
@@ -120,7 +122,8 @@ class HadoopMapReduceCommitProtocol(
 
   protected def setupCommitter(context: TaskAttemptContext): OutputCommitter = {
     if (isPartitionOverwrite) {
-      context.getConfiguration.set(FileOutputFormat.OUTDIR, getOutputPath(context).toString)
+      outputPath = getOutputPath(context)
+      context.getConfiguration.set(FileOutputFormat.OUTDIR, outputPath.toString)
     }
 
     val format = context.getOutputFormatClass.getConstructor().newInstance()
@@ -232,22 +235,23 @@ class HadoopMapReduceCommitProtocol(
           fs.rename(new Path(stagingDir, part), finalPartPath)
         }
       } else if (isPartitionOverwrite) {
-        if (!getStaticPartitionPath().isEmpty) {
-          val finalPartPath = new Path(path, getStaticPartitionPath)
-          if (fs.exists(new Path(stagingDir, getStaticPartitionPath()))) {
-            assert(!fs.exists(finalPartPath))
-            fs.rename(new Path(stagingDir, getStaticPartitionPath), finalPartPath)
-          }
-        } else {
-          val parts = fs.listStatus(stagingDir)
-            .map(_.getPath.getName)
-            .filter(name => !name.startsWith(".") && name.contains("="))
-          for (part <- parts) {
-            val finalPartPath = new Path(path, part)
-            assert(!fs.exists(finalPartPath))
-            fs.rename(new Path(stagingDir, part), finalPartPath)
-          }
-        }
+        mergePaths(fs, fs.getFileStatus(outputPath), new Path(path))
+//        if (!getStaticPartitionPath().isEmpty) {
+//          val finalPartPath = new Path(path, getStaticPartitionPath)
+//          if (fs.exists(new Path(stagingDir, getStaticPartitionPath()))) {
+//            assert(!fs.exists(finalPartPath))
+//            fs.rename(new Path(stagingDir, getStaticPartitionPath), finalPartPath)
+//          }
+//        } else {
+//          val parts = fs.listStatus(stagingDir)
+//            .map(_.getPath.getName)
+//            .filter(name => !name.startsWith(".") && name.contains("="))
+//          for (part <- parts) {
+//            val finalPartPath = new Path(path, part)
+//            assert(!fs.exists(finalPartPath))
+//            fs.rename(new Path(stagingDir, part), finalPartPath)
+//          }
+//        }
       }
 
       fs.delete(stagingDir, true)
@@ -395,8 +399,8 @@ object  HadoopMapReduceCommitProtocol extends Logging {
 
           renameOrMerge(fs, from, to);
         } else {
-          var var5 = fs.listStatus(from.getPath());
-          var var6 = var5.length;
+          val var5 = fs.listStatus(from.getPath());
+          val var6 = var5.length;
 
           for (var7 <- 0 until var6) {
             val subFrom = var5(var7)
