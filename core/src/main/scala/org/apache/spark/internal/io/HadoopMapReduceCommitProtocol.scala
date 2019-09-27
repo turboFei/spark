@@ -97,9 +97,10 @@ class HadoopMapReduceCommitProtocol(
   private def stagingDir = new Path(path, ".spark-staging-" + jobId)
 
   /**
-   * Whether is a InsertIntoHadoopFsRelation operation, the default is false.
+   * For InsertIntoHadoopFsRelation operation, we support concurrent write to different partitions
+   * in a same table.
    */
-  private def isInsertIntoHadoopFsRelation =
+  def supportConcurrent: Boolean =
     fileSourceWriteDesc.map(_.isInsertIntoHadoopFsRelation).getOrElse(false)
 
   /**
@@ -128,7 +129,7 @@ class HadoopMapReduceCommitProtocol(
    * @return Path the desired output path.
    */
   protected def getOutputPath(context: TaskAttemptContext): Path = {
-    if (isInsertIntoHadoopFsRelation) {
+    if (supportConcurrent) {
       val insertStagingPath = ".spark-staging-" + escapedStaticPartitionKVs.size
       insertStagingDir = new Path(path, insertStagingPath)
       val appId = SparkEnv.get.conf.getAppId
@@ -143,7 +144,7 @@ class HadoopMapReduceCommitProtocol(
   }
 
   protected def setupCommitter(context: TaskAttemptContext): OutputCommitter = {
-    if (isInsertIntoHadoopFsRelation) {
+    if (supportConcurrent) {
       stagingOutputPath = getOutputPath(context)
       context.getConfiguration.set(FileOutputFormat.OUTDIR, stagingOutputPath.toString)
       logWarning("Set file output committer algorithm version to 2 implicitly," +
@@ -260,14 +261,14 @@ class HadoopMapReduceCommitProtocol(
           }
           fs.rename(new Path(stagingDir, part), finalPartPath)
         }
-      } else if (isInsertIntoHadoopFsRelation) {
+      } else if (supportConcurrent) {
         // For InsertIntoHadoopFsRelation operation, the result has been committed to staging
         // output path, merge it to destination path.
         FileCommitProtocol.mergePaths(committer.asInstanceOf[FileOutputCommitter], fs,
           fs.getFileStatus(stagingOutputPath), new Path(path), jobContext)
       }
 
-      if (isInsertIntoHadoopFsRelation) {
+      if (supportConcurrent) {
         // For InsertIntoHadoopFsRelation operation, try to delete its staging output path.
         deleteStagingInsertOutputPath(fs, insertStagingDir, escapedStaticPartitionKVs)
       }

@@ -123,7 +123,7 @@ case class InsertIntoHadoopFsRelationCommand(
       fileSourceWriteDesc = Some(FileSourceWriteDesc(true, escapedStaticPartitionKVs)))
 
     val doInsertion = if (mode == SaveMode.Append) {
-      detectConflict(fs, outputPath, escapedStaticPartitionKVs)
+      detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs)
       true
     } else {
       val pathExists = fs.exists(qualifiedOutputPath)
@@ -134,7 +134,7 @@ case class InsertIntoHadoopFsRelationCommand(
           if (ifPartitionNotExists && matchingPartitions.nonEmpty) {
             false
           } else {
-            detectConflict(fs, outputPath, escapedStaticPartitionKVs)
+            detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs)
             if (dynamicPartitionOverwrite) {
               // For dynamic partition overwrite, do not delete partition directories ahead.
               true
@@ -144,11 +144,11 @@ case class InsertIntoHadoopFsRelationCommand(
             }
           }
         case (SaveMode.Overwrite, _) | (SaveMode.ErrorIfExists, false) =>
-          detectConflict(fs, outputPath, escapedStaticPartitionKVs)
+          detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs)
           true
         case (SaveMode.Ignore, exists) =>
           if (!exists) {
-            detectConflict(fs, outputPath, escapedStaticPartitionKVs)
+            detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs)
           }
           !exists
         case (s, exists) =>
@@ -289,39 +289,46 @@ case class InsertIntoHadoopFsRelationCommand(
   }
 
   /**
-   * Detect the conflict when there are several InsertIntoHadoopFsRelation operations
-   * write to same partition in the same table or a non-partitioned table concurrently.
+   * Check current committer whether supports several InsertIntoHadoopFsRelation operations write
+   * to different partitions in a same table concurrently. If supports, then detect the conflict
+   * whether there are several operations write to same partition in the same table or write to
+   * a non-partitioned table.
    */
   private def detectConflict(
+      commitProtocol: FileCommitProtocol,
       fs: FileSystem,
       path: Path,
       staticPartitionKVs: Seq[(String, String)]): Unit = {
     import HadoopMapReduceCommitProtocol._
 
-    val insertStagingPath = ".spark-staging-" + staticPartitionKVs.size
-    val insertStagingDir = new Path(outputPath, insertStagingPath)
-    val stagingOutputDir = new Path(outputPath, Array(insertStagingPath,
-      getEscapedStaticPartitionPath(staticPartitionKVs)).mkString(File.separator))
+    val supportConcurrent = commitProtocol.isInstanceOf[HadoopMapReduceCommitProtocol] &&
+      commitProtocol.asInstanceOf[HadoopMapReduceCommitProtocol].supportConcurrent
+    if (supportConcurrent) {
+      val insertStagingPath = ".spark-staging-" + staticPartitionKVs.size
+      val stagingOutputDir = new Path(outputPath, Array(insertStagingPath,
+        getEscapedStaticPartitionPath(staticPartitionKVs)).mkString(File.separator))
+      val insertStagingDir = new Path(outputPath, insertStagingPath)
 
-    if (fs.exists(stagingOutputDir)) {
-      throwConflictException(fs, insertStagingDir, staticPartitionKVs.size, staticPartitionKVs)
-    }
-    fs.mkdirs(stagingOutputDir)
+      if (fs.exists(stagingOutputDir)) {
+        throwConflictException(fs, insertStagingDir, staticPartitionKVs.size, staticPartitionKVs)
+      }
+      fs.mkdirs(stagingOutputDir)
 
-    for (i <- 0 to partitionColumns.size) {
-      if (i != staticPartitionKVs.size) {
-        val stagingDir = new Path(path, ".spark-staging-" + i)
-        if (fs.exists(stagingDir)) {
-          val subPath = getEscapedStaticPartitionPath(
-            staticPartitionKVs.slice(0, i))
-          val checkedPath = if (!subPath.isEmpty) {
-            new Path(stagingDir, subPath)
-          } else {
-            stagingDir
-          }
-          if (fs.exists(checkedPath)) {
-            deleteStagingInsertOutputPath(fs, insertStagingDir, staticPartitionKVs)
-            throwConflictException(fs, stagingDir, i, staticPartitionKVs)
+      for (i <- 0 to partitionColumns.size) {
+        if (i != staticPartitionKVs.size) {
+          val stagingDir = new Path(path, ".spark-staging-" + i)
+          if (fs.exists(stagingDir)) {
+            val subPath = getEscapedStaticPartitionPath(
+              staticPartitionKVs.slice(0, i))
+            val checkedPath = if (!subPath.isEmpty) {
+              new Path(stagingDir, subPath)
+            } else {
+              stagingDir
+            }
+            if (fs.exists(checkedPath)) {
+              deleteStagingInsertOutputPath(fs, insertStagingDir, staticPartitionKVs)
+              throwConflictException(fs, stagingDir, i, staticPartitionKVs)
+            }
           }
         }
       }
