@@ -33,7 +33,8 @@ import org.apache.spark.util.Utils
  *    will be used for tasks on executors.
  * 2. Implementations should have a constructor with 2 or 3 arguments:
  *      (jobId: String, path: String) or
- *      (jobId: String, path: String, dynamicPartitionOverwrite: Boolean)
+ *      (jobId: String, path: String, dynamicPartitionOverwrite: Boolean) or
+ *      (jobId: String, path: String, fileSourceWriteDesc: Option[FileSourceWriteDesc])
  * 3. A committer should not be reused across multiple Spark jobs.
  *
  * The proper call sequence is:

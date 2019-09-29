@@ -134,8 +134,8 @@ case class InsertIntoHadoopFsRelationCommand(
       fileSourceWriteDesc = fileSourceWriteDesc)
 
     try {
+      var doDeleteMatchingPartitions: Boolean = false
       val doInsertion = if (mode == SaveMode.Append) {
-        detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs, appId, jobId)
         true
       } else {
         val pathExists = fs.exists(qualifiedOutputPath)
@@ -145,24 +145,16 @@ case class InsertIntoHadoopFsRelationCommand(
           case (SaveMode.Overwrite, true) =>
             if (ifPartitionNotExists && matchingPartitions.nonEmpty) {
               false
+            } else if (dynamicPartitionOverwrite) {
+              // For dynamic partition overwrite, do not delete partition directories ahead.
+              true
             } else {
-              detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs, appId, jobId)
-              if (dynamicPartitionOverwrite) {
-                // For dynamic partition overwrite, do not delete partition directories ahead.
-                true
-              } else {
-                deleteMatchingPartitions(fs, qualifiedOutputPath, customPartitionLocations,
-                  committer)
-                true
-              }
+              doDeleteMatchingPartitions = true
+              true
             }
           case (SaveMode.Overwrite, _) | (SaveMode.ErrorIfExists, false) =>
-            detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs, appId, jobId)
             true
           case (SaveMode.Ignore, exists) =>
-            if (!exists) {
-              detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs, appId, jobId)
-            }
             !exists
           case (s, exists) =>
             throw new IllegalStateException(s"unsupported save mode $s ($exists)")
@@ -170,6 +162,12 @@ case class InsertIntoHadoopFsRelationCommand(
       }
 
       if (doInsertion) {
+        // For insertion operation, detect whether there is a conflict.
+        detectConflict(committer, fs, outputPath, escapedStaticPartitionKVs, appId, jobId)
+
+        if (doDeleteMatchingPartitions) {
+          deleteMatchingPartitions(fs, qualifiedOutputPath, customPartitionLocations, committer)
+        }
 
         def refreshUpdatedPartitions(updatedPartitionPaths: Set[String]): Unit = {
           val updatedPartitions = updatedPartitionPaths.map(PartitioningUtils.parsePathFragment)

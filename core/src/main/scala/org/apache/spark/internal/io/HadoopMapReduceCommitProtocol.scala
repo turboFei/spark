@@ -152,7 +152,7 @@ class HadoopMapReduceCommitProtocol(
     if (supportConcurrent) {
       stagingOutputPath = getOutputPath(context)
       context.getConfiguration.set(FileOutputFormat.OUTDIR, stagingOutputPath.toString)
-      logWarning("Set file output committer algorithm version to 2 implicitly," +
+      logDebug("Set file output committer algorithm version to 2 implicitly," +
         " for that the task output would be committed to staging output path firstly," +
         " which is equivalent to algorithm 1.")
       context.getConfiguration.setInt(FileOutputCommitter.FILEOUTPUTCOMMITTER_ALGORITHM_VERSION, 2)
