@@ -216,8 +216,8 @@ class PartitionedWriteSuite extends QueryTest with SharedSparkSession {
           .saveAsTable("ta")
 
         spark.range(0, 10).toDF("a").write.mode("overwrite").saveAsTable("tb")
-        val stat1 = "insert overwrite table ta select a, 1 from tb"
-        val stat2 = "insert overwrite table ta select a, 2 from tb"
+        val stat1 = "insert overwrite table ta partition(b=1) select a from tb"
+        val stat2 = "insert overwrite table ta partition(b=1) select a from tb"
         val stats = Seq(stat1, stat2)
 
         var throwable: Option[Throwable] = None
