@@ -50,10 +50,9 @@ private class OnlyDetectCustomPathFileCommitProtocol(jobId: String, path: String
 private class DetectCorrectOutputPathFileCommitProtocol(
     jobId: String,
     path: String,
-    dynamicPartitionOverwrite: Boolean,
     fileSourceWriteDesc: Option[FileSourceWriteDesc])
-  extends SQLHadoopMapReduceCommitProtocol(jobId, path, dynamicPartitionOverwrite,
-    fileSourceWriteDesc) with Serializable with Logging {
+  extends SQLHadoopMapReduceCommitProtocol(jobId, path, fileSourceWriteDesc) with Serializable
+    with Logging {
 
   override def setupCommitter(context: TaskAttemptContext): OutputCommitter = {
     val committer = super.setupCommitter(context)

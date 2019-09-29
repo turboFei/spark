@@ -122,12 +122,16 @@ case class InsertIntoHadoopFsRelationCommand(
         (escapedKey, escapedValue)
       }
 
+    val fileSourceWriteDesc = Some(new FileSourceWriteDesc(
+      isInsertIntoHadoopFsRelation = true,
+      dynamicPartitionOverwrite = dynamicPartitionOverwrite,
+      escapedStaticPartitionKVs = escapedStaticPartitionKVs))
+
     val committer = FileCommitProtocol.instantiate(
       sparkSession.sessionState.conf.fileCommitProtocolClass,
       jobId = jobId,
       outputPath = outputPath.toString,
-      dynamicPartitionOverwrite = dynamicPartitionOverwrite,
-      fileSourceWriteDesc = Some(FileSourceWriteDesc(true, escapedStaticPartitionKVs)))
+      fileSourceWriteDesc = fileSourceWriteDesc)
 
     try {
       val doInsertion = if (mode == SaveMode.Append) {
