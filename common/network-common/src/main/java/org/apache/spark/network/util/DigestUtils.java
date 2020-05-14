@@ -36,6 +36,9 @@ public class DigestUtils {
     }
 
     public static long getDigest(File file, long offset, long length) {
+        if (file == null || length <= 0) {
+            return -1;
+        }
         try {
             LimitedInputStream inputStream = new LimitedInputStream(new FileInputStream(file),
               offset + length, true);
