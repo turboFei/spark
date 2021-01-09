@@ -97,12 +97,9 @@ class CliSuite extends SparkFunSuite with BeforeAndAfterAll with Logging {
           // empty query means a command launched with -e
           Seq(answer)
         } else {
-          // spark-sql echoes the submitted queries
-          val xs = query.split("\n").toList
-          val queryEcho = s"spark-sql> ${xs.head}" :: xs.tail.map(l => s"         > $l")
           // longer lines sometimes get split in the output,
           // match the first 60 characters of each query line
-          queryEcho.map(_.take(60)) :+ answer
+          query.split("\n").map(_.take(60)) :+ answer
         }
     }
 
@@ -592,6 +589,14 @@ class CliSuite extends SparkFunSuite with BeforeAndAfterAll with Logging {
       "EXPLAIN SELECT /*+ MERGEJOIN(t1) */ t1.* FROM t1 JOIN t2 ON t1.k = t2.v;" -> "SortMergeJoin",
       "EXPLAIN SELECT /* + MERGEJOIN(t1) */ t1.* FROM t1 JOIN t2 ON t1.k = t2.v;"
         -> "BroadcastHashJoin"
+    )
+  }
+
+  test("SPARK-34040: Fix corner case for runCliWithin function") {
+    runCliWithin(2.minute)(
+      "select 'test1';\n select 'test2';" -> "test2",
+      "select 'test1';\n" -> "test1",
+      "select 'test2';" -> "test2"
     )
   }
 }
