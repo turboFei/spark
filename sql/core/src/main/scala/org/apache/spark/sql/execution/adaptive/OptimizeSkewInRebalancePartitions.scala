@@ -50,12 +50,13 @@ object OptimizeSkewInRebalancePartitions extends AQEShuffleReadRule {
   private def optimizeSkewedPartitions(
       shuffleId: Int,
       bytesByPartitionId: Array[Long],
-      targetSize: Long): Seq[ShufflePartitionSpec] = {
+      targetSize: Long,
+      isCelebornShuffle: Boolean = false): Seq[ShufflePartitionSpec] = {
     bytesByPartitionId.indices.flatMap { reduceIndex =>
       val bytes = bytesByPartitionId(reduceIndex)
       if (bytes > targetSize) {
         val newPartitionSpec =
-          ShufflePartitionsUtil.createSkewPartitionSpecs(shuffleId, reduceIndex, targetSize)
+          ShufflePartitionsUtil.createSkewPartitionSpecs(shuffleId, reduceIndex, targetSize, isCelebornShuffle)
         if (newPartitionSpec.isEmpty) {
           CoalescedPartitionSpec(reduceIndex, reduceIndex + 1, bytes) :: Nil
         } else {
@@ -77,8 +78,9 @@ object OptimizeSkewInRebalancePartitions extends AQEShuffleReadRule {
       return shuffle
     }
 
+    val isCelebornShuffle = CelebornShuffleUtil.isCelebornShuffle(shuffle.shuffle)
     val newPartitionsSpec = optimizeSkewedPartitions(
-      mapStats.get.shuffleId, mapStats.get.bytesByPartitionId, advisorySize)
+      mapStats.get.shuffleId, mapStats.get.bytesByPartitionId, advisorySize, isCelebornShuffle)
     // return origin plan if we can not optimize partitions
     if (newPartitionsSpec.length == mapStats.get.bytesByPartitionId.length) {
       shuffle

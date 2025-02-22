@@ -33,6 +33,7 @@ import org.apache.commons.io.output.{ByteArrayOutputStream => ApacheByteArrayOut
 import org.roaringbitmap.RoaringBitmap
 
 import org.apache.spark.broadcast.{Broadcast, BroadcastManager}
+import org.apache.spark.celeborn.CelebornShuffleState
 import org.apache.spark.internal.Logging
 import org.apache.spark.internal.config._
 import org.apache.spark.io.CompressionCodec
@@ -839,6 +840,7 @@ private[spark] class MapOutputTrackerMaster(
         shuffleStatus.invalidateSerializedMergeOutputStatusCache()
       }
     }
+    CelebornShuffleState.unregisterCelebornSkewedShuffle(shuffleId)
   }
 
   /**
