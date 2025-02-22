@@ -20,6 +20,7 @@ package org.apache.spark.sql.execution.adaptive
 import scala.collection.mutable.ArrayBuffer
 
 import org.apache.spark.{MapOutputStatistics, MapOutputTrackerMaster, SparkEnv}
+import org.apache.spark.celeborn.CelebornShuffleState
 import org.apache.spark.internal.Logging
 import org.apache.spark.sql.execution.{CoalescedPartitionSpec, PartialReducerPartitionSpec, ShufflePartitionSpec}
 
@@ -376,11 +377,20 @@ object ShufflePartitionsUtil extends Logging {
   def createSkewPartitionSpecs(
       shuffleId: Int,
       reducerId: Int,
-      targetSize: Long): Option[Seq[PartialReducerPartitionSpec]] = {
+      targetSize: Long,
+      isCelebornShuffle: Boolean = false): Option[Seq[PartialReducerPartitionSpec]] = {
     val mapPartitionSizes = getMapSizesForReduceId(shuffleId, reducerId)
     if (mapPartitionSizes.exists(_ < 0)) return None
     val mapStartIndices = splitSizeListByTargetSize(mapPartitionSizes, targetSize)
     if (mapStartIndices.length > 1) {
+      val celebornClientAdaptiveOptimizeSkewedPartitionReadEnabled =
+        CelebornShuffleState.celebornAdaptiveOptimizeSkewedPartitionReadEnabled && isCelebornShuffle
+
+      val throwsFetchFailure = CelebornShuffleState.celebornStageRerunEnabled
+      if (throwsFetchFailure && celebornClientAdaptiveOptimizeSkewedPartitionReadEnabled) {
+        logInfo(s"Celeborn shuffle retry enabled and shuffle $shuffleId is skewed")
+        CelebornShuffleState.registerCelebornSkewedShuffle(shuffleId)
+      }
       Some(mapStartIndices.indices.map { i =>
         val startMapIndex = mapStartIndices(i)
         val endMapIndex = if (i == mapStartIndices.length - 1) {
@@ -388,8 +398,21 @@ object ShufflePartitionsUtil extends Logging {
         } else {
           mapStartIndices(i + 1)
         }
-        val dataSize = startMapIndex.until(endMapIndex).map(mapPartitionSizes(_)).sum
-        PartialReducerPartitionSpec(reducerId, startMapIndex, endMapIndex, dataSize)
+        var dataSize = 0L
+        var mapIndex = startMapIndex
+        while (mapIndex < endMapIndex) {
+          dataSize += mapPartitionSizes(mapIndex)
+          mapIndex += 1
+        }
+
+        if (celebornClientAdaptiveOptimizeSkewedPartitionReadEnabled) {
+          // These `dataSize` variables may not be accurate as they only represent the sum of
+          // `dataSize` when the Celeborn optimize skewed partition read feature is enabled.
+          // Please not to use these dataSize variables in any other part of the codebase.
+          PartialReducerPartitionSpec(reducerId, mapStartIndices.length, i, dataSize)
+        } else {
+          PartialReducerPartitionSpec(reducerId, startMapIndex, endMapIndex, dataSize)
+        }
       })
     } else {
       None
