@@ -34,6 +34,7 @@ import com.google.common.util.concurrent.{Futures, SettableFuture}
 
 import org.apache.spark._
 import org.apache.spark.broadcast.Broadcast
+import org.apache.spark.celeborn.CelebornShuffleState
 import org.apache.spark.errors.SparkCoreErrors
 import org.apache.spark.executor.{ExecutorMetrics, TaskMetrics}
 import org.apache.spark.internal.Logging
@@ -1962,7 +1963,7 @@ private[spark] class DAGScheduler(
 
           val shouldAbortStage =
             failedStage.failedAttemptIds.size >= maxConsecutiveStageAttempts ||
-            disallowStageRetryForTest
+            disallowStageRetryForTest || CelebornShuffleState.isCelebornSkewedShuffle(shuffleId)
 
           // It is likely that we receive multiple FetchFailed for a single stage (because we have
           // multiple tasks running concurrently on different executors). In that case, it is
