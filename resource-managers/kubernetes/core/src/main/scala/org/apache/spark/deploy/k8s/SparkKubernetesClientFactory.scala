@@ -21,9 +21,7 @@ import java.nio.file.Files
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import io.fabric8.kubernetes.client.{ConfigBuilder, KubernetesClient, KubernetesClientBuilder}
-import io.fabric8.kubernetes.client.Config.KUBERNETES_REQUEST_RETRY_BACKOFFLIMIT_SYSTEM_PROPERTY
 import io.fabric8.kubernetes.client.Config.autoConfigure
-import io.fabric8.kubernetes.client.utils.Utils.getSystemPropertyOrEnvVar
 
 import org.apache.spark.SparkConf
 import org.apache.spark.annotation.{DeveloperApi, Since, Stable}
@@ -80,11 +78,6 @@ object SparkKubernetesClientFactory extends Logging {
       log"${MDC(K8S_CONTEXT, kubeContext.map("context " + _).getOrElse("current context"))}" +
       log" from users K8S config file")
 
-    // if backoff limit is not set then set it to 3
-    if (getSystemPropertyOrEnvVar(KUBERNETES_REQUEST_RETRY_BACKOFFLIMIT_SYSTEM_PROPERTY) == null) {
-      System.setProperty(KUBERNETES_REQUEST_RETRY_BACKOFFLIMIT_SYSTEM_PROPERTY, "3")
-    }
-
     // Start from an auto-configured config with the desired context
     // Fabric 8 uses null to indicate that the users current context should be used so if no
     // explicit setting pass null
@@ -93,6 +86,8 @@ object SparkKubernetesClientFactory extends Logging {
       .withMasterUrl(master)
       .withRequestTimeout(clientType.requestTimeout(sparkConf))
       .withConnectionTimeout(clientType.connectionTimeout(sparkConf))
+      .withRequestRetryBackoffLimit(clientType.requestRetryBackoffLimit(sparkConf))
+      .withRequestRetryBackoffInterval(clientType.requestRetryBackoffInterval(sparkConf))
       .withTrustCerts(sparkConf.get(KUBERNETES_TRUST_CERTIFICATES))
       .withOption(oauthTokenValue) {
         (token, configBuilder) => configBuilder.withOauthToken(token)
@@ -127,16 +122,29 @@ object SparkKubernetesClientFactory extends Logging {
   object ClientType extends Enumeration {
     import scala.language.implicitConversions
     val Driver: ClientTypeVal =
-      ClientTypeVal(DRIVER_CLIENT_REQUEST_TIMEOUT, DRIVER_CLIENT_CONNECTION_TIMEOUT)
+      ClientTypeVal(
+        DRIVER_CLIENT_REQUEST_TIMEOUT,
+        DRIVER_CLIENT_CONNECTION_TIMEOUT,
+        DRIVER_CLIENT_REQUEST_RETRY_BACKOFF_LIMIT,
+        DRIVER_CLIENT_REQUEST_RETRY_BACKOFF_INTERVAL)
     val Submission: ClientTypeVal =
-      ClientTypeVal(SUBMISSION_CLIENT_REQUEST_TIMEOUT, SUBMISSION_CLIENT_CONNECTION_TIMEOUT)
+      ClientTypeVal(
+        SUBMISSION_CLIENT_REQUEST_TIMEOUT,
+        SUBMISSION_CLIENT_CONNECTION_TIMEOUT,
+        SUBMISSION_CLIENT_REQUEST_RETRY_BACKOFF_LIMIT,
+        SUBMISSION_CLIENT_REQUEST_RETRY_BACKOFF_INTERVAL)
 
     protected case class ClientTypeVal(
         requestTimeoutEntry: ConfigEntry[Int],
-        connectionTimeoutEntry: ConfigEntry[Int])
+        connectionTimeoutEntry: ConfigEntry[Int],
+        requestRetryBackoffLimitEntry: ConfigEntry[Int],
+        requestRetryBackoffIntervalEntry: ConfigEntry[Int])
       extends Val {
       def requestTimeout(conf: SparkConf): Int = conf.get(requestTimeoutEntry)
       def connectionTimeout(conf: SparkConf): Int = conf.get(connectionTimeoutEntry)
+      def requestRetryBackoffLimit(conf: SparkConf): Int = conf.get(requestRetryBackoffLimitEntry)
+      def requestRetryBackoffInterval(conf: SparkConf): Int =
+        conf.get(requestRetryBackoffIntervalEntry)
     }
 
     implicit def convert(value: Value): ClientTypeVal = value.asInstanceOf[ClientTypeVal]

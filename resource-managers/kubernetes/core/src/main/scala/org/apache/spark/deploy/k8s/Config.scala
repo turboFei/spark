@@ -300,6 +300,41 @@ private[spark] object Config extends Logging {
       .intConf
       .createWithDefault(10000)
 
+  val SUBMISSION_CLIENT_REQUEST_RETRY_BACKOFF_LIMIT =
+    ConfigBuilder("spark.kubernetes.submission.requestRetryBackoffLimit")
+      .doc("Maximum number of retry attempts for Kubernetes API requests when starting the driver")
+      .version("4.2.0")
+      .intConf
+      .checkValue(value => value >= 0, "Retry backoff limit must be non-negative")
+      .createWithDefault(3)
+
+  val SUBMISSION_CLIENT_REQUEST_RETRY_BACKOFF_INTERVAL =
+    ConfigBuilder("spark.kubernetes.submission.requestRetryBackoffInterval")
+      .doc("Backoff interval in milliseconds between retry attempts for Kubernetes API requests " +
+        "when starting the driver")
+      .version("4.2.0")
+      .intConf
+      .checkValue(value => value > 0, "Retry backoff interval must be positive")
+      .createWithDefault(1000)
+
+  val DRIVER_CLIENT_REQUEST_RETRY_BACKOFF_LIMIT =
+    ConfigBuilder("spark.kubernetes.driver.requestRetryBackoffLimit")
+      .doc("Maximum number of retry attempts for Kubernetes API requests when driver requests " +
+        "executors")
+      .version("4.2.0")
+      .intConf
+      .checkValue(value => value >= 0, "Retry backoff limit must be non-negative")
+      .createWithDefault(3)
+
+  val DRIVER_CLIENT_REQUEST_RETRY_BACKOFF_INTERVAL =
+    ConfigBuilder("spark.kubernetes.driver.requestRetryBackoffInterval")
+      .doc("Backoff interval in milliseconds between retry attempts for Kubernetes API requests " +
+        "when driver requests executors")
+      .version("4.2.0")
+      .intConf
+      .checkValue(value => value > 0, "Retry backoff interval must be positive")
+      .createWithDefault(1000)
+
   val KUBERNETES_DRIVER_SERVICE_ACCOUNT_NAME =
     ConfigBuilder(s"$KUBERNETES_AUTH_DRIVER_CONF_PREFIX.serviceAccountName")
       .doc("Service account that is used when running the driver pod. The driver pod uses " +
